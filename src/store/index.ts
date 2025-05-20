@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
-import { Conversation, Message, ModelConfig, Preset } from "@/types";
+import { Conversation, Message, ModelConfig, Preset, MessageRole } from "@/types";
 
 interface AppState {
   conversations: Conversation[];
@@ -164,7 +164,7 @@ export const useAppStore = create<AppState>()(
       addMessage: (conversationId, role, content) => {
         const message: Message = {
           id: uuidv4(),
-          role: role as any,
+          role: role as MessageRole,
           content,
           timestamp: Date.now(),
         };

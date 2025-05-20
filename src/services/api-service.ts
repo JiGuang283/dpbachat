@@ -2,6 +2,24 @@ import axios from "axios";
 import { ApiCallOptions, ApiResponse, ModelConfig, ModelType } from "@/types";
 
 /**
+ * API错误响应类型定义
+ */
+interface ApiErrorResponse {
+  status?: number;
+  data?: {
+    error?: { message?: string } | string;
+    message?: string;
+  };
+}
+
+/**
+ * API错误类型定义
+ */
+interface ApiError extends Error { // Ensure it extends Error for proper error handling
+  response?: ApiErrorResponse;
+}
+
+/**
  * API服务工厂 - 根据模型类型创建对应的API服务实例
  */
 export const createApiService = (modelConfig: ModelConfig) => {
@@ -40,23 +58,65 @@ abstract class BaseApiService {
   /**
    * 提取API错误信息 - 统一错误处理逻辑
    */
-  protected extractErrorMessage(error: any, defaultPrefix: string): string {
-    // 首先尝试从响应数据中获取错误信息
-    if (error.response?.data?.error?.message) {
-      return error.response.data.error.message;
-    } else if (error.response?.data?.message) {
-      return error.response.data.message;
-    } else if (error.message) {
-      return error.message;
+  protected extractErrorMessage(error: unknown, defaultPrefix: string): string {
+    // 类型守卫函数
+    const isApiError = (err: unknown): err is ApiError => {
+      return (
+        err !== null &&
+        typeof err === "object" &&
+        "message" in err 
+        // Optionally, check for 'response' if it's a critical part of ApiError
+        // && (typeof (err as any).response === 'object' || (err as any).response === undefined) 
+      );
+    };
+
+    if (isApiError(error)) {
+      // 首先尝试从响应数据中获取错误信息
+      if (error.response?.data?.error) {
+        if (typeof error.response.data.error === "string") {
+          return error.response.data.error;
+        } else if (error.response.data.error.message) {
+          return error.response.data.error.message;
+        }
+      }
+      if (error.response?.data?.message) {
+        return error.response.data.message;
+      }
+      // 如果响应中没有具体的错误信息，但 error 对象本身有 message 属性
+      if (error.message) {
+        // 基于HTTP状态码给出友好提示 (如果存在response)
+        if (error.response?.status) {
+          const status = error.response.status;
+          if (status === 401) {
+            return `${defaultPrefix} API密钥无效或已过期 (${error.message})`;
+          } else if (status === 404) {
+            return `${defaultPrefix} 模型不存在或API端点错误 (${error.message})`;
+          } else if (status === 429) {
+            return `${defaultPrefix} 请求频率限制，请稍后再试 (${error.message})`;
+          }
+        }
+        return error.message; // Fallback to the direct error message
+      }
     }
 
-    // 基于HTTP状态码给出友好提示
-    if (error.response?.status === 401) {
-      return `${defaultPrefix} API密钥无效或已过期`;
-    } else if (error.response?.status === 404) {
-      return `${defaultPrefix} 模型不存在或API端点错误`;
-    } else if (error.response?.status === 429) {
-      return `${defaultPrefix} 请求频率限制，请稍后再试`;
+    // 如果不是 ApiError 或者没有提取到特定消息，则使用通用 HTTP 状态码提示
+    // This part requires error to be 'any' or to have a more specific Axios-like error type
+    // For now, we'll assume it might have a response property if not an ApiError
+    const potentialAxiosError = error as any;
+    if (potentialAxiosError?.response?.status) {
+        const status = potentialAxiosError.response.status;
+        if (status === 401) {
+            return `${defaultPrefix} API密钥无效或已过期`;
+        } else if (status === 404) {
+            return `${defaultPrefix} 模型不存在或API端点错误`;
+        } else if (status === 429) {
+            return `${defaultPrefix} 请求频率限制，请稍后再试`;
+        }
+    }
+    
+    // 如果 error 不是 Error 的实例，则返回通用未知错误
+    if (error instanceof Error) {
+        return `${defaultPrefix} ${error.message || "未知错误"}`;
     }
 
     return `${defaultPrefix} 未知错误`;
@@ -109,7 +169,7 @@ class OpenAIService extends BaseApiService {
       }
 
       return { content: response.data.choices[0].message.content || "" };
-    } catch (error: any) {
+    } catch (error) {
       console.error("OpenAI API调用失败:", error);
       return { content: "", error: this.extractErrorMessage(error, "OpenAI") };
     }
@@ -135,7 +195,7 @@ class DeepSeekService extends BaseApiService {
       }
 
       // 标准化消息格式
-      let messages = options.messages.map((msg) => ({
+      const messages = options.messages.map((msg) => ({
         role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
         content: msg.content,
       }));
@@ -170,7 +230,7 @@ class DeepSeekService extends BaseApiService {
       );
 
       return { content: response.data.choices[0].message.content };
-    } catch (error: any) {
+    } catch (error) {
       console.error("DeepSeek API调用失败:", error);
       return {
         content: "",
@@ -244,7 +304,7 @@ class GeminiService extends BaseApiService {
       }
 
       return { content: response.data.candidates[0].content.parts[0].text };
-    } catch (error: any) {
+    } catch (error) {
       console.error("Gemini API调用失败:", error);
       return { content: "", error: this.extractErrorMessage(error, "Gemini") };
     }
@@ -368,7 +428,7 @@ class ClaudeService extends BaseApiService {
       }
 
       return { content: response.data.content[0].text };
-    } catch (error: any) {
+    } catch (error) {
       console.error("Claude API调用失败:", error);
       return { content: "", error: this.extractErrorMessage(error, "Claude") };
     }

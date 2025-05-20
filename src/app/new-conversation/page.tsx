@@ -10,7 +10,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -49,7 +48,7 @@ export default function NewConversation() {
   const router = useRouter();
   const { models, presets, createConversation, creating } = useAppStore();
   const [isCreating, setIsCreating] = useState(false);
-  const [currentPreset, setCurrentPreset] = useState<any>(null);
+  const [currentPreset, setCurrentPreset] = useState<null | { id: string; armoringPrompt: string; systemPrompt: string }>(null);
 
   // 初始化表单
   const form = useForm<FormData>({
@@ -161,9 +160,10 @@ export default function NewConversation() {
 
       // 重定向到主页
       router.push("/");
-    } catch (error: any) {
+    } catch (error) {
       console.error("创建对话失败:", error);
-      alert(`创建对话失败: ${error.message || "未知错误"}`);
+      const errorMessage = error instanceof Error ? error.message : "未知错误";
+      alert(`创建对话失败: ${errorMessage}`);
     } finally {
       setIsCreating(false);
     }

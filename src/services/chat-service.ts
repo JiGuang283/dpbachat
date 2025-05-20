@@ -1,10 +1,10 @@
-import { v4 as uuidv4 } from "uuid";
+// import { v4 as uuidv4 } from "uuid"; // 未使用，暂时注释
 import { createApiService } from "./api-service";
 import { useAppStore } from "@/store";
 import {
-  ApiCallOptions,
+  // ApiCallOptions, // 未使用，暂时注释
   Conversation,
-  Message,
+  // Message, // 未使用，暂时注释
   MessageRole,
   ModelConfig,
   Preset,
@@ -22,7 +22,7 @@ export class ChatService {
     const store = useAppStore.getState();
     try {
       // 标记创建中，UI可监听此状态显示动画
-      store.setCreating && store.setCreating(true);
+      store.setCreating(true);
 
       // 1. 发送穿甲弹（以用户消息身份），等待AI回复
       if (preset.armoringPrompt.trim()) {
@@ -69,16 +69,17 @@ export class ChatService {
         await this.sendSingleMessageAndWait(conversation.id, model);
         console.log(`系统预设发送完成，AI已回复，对话初始化完成`);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error(`预设初始化异常:`, error);
+      const errorMessage = error instanceof Error ? error.message : "未知错误";
       store.addMessage(
         conversation.id,
         MessageRole.Assistant,
-        `初始化对话失败: ${error.message || "未知错误"}`
+        `初始化对话失败: ${errorMessage}`
       );
     } finally {
       // 创建结束，关闭动画
-      store.setCreating && store.setCreating(false);
+      store.setCreating(false);
     }
   }
 
@@ -149,23 +150,40 @@ export class ChatService {
 
       // 返回前短暂延迟，确保UI更新
       await new Promise((resolve) => setTimeout(resolve, 100));
-    } catch (error: any) {
+    } catch (error) {
       console.error(`发送消息异常:`, error);
-      const errorMessage = error.message || "未知错误";
+      
+      // 定义API错误响应接口
+      interface ApiErrorResponse {
+        status: number;
+        data: string | { 
+          error?: string | { message?: string };
+        };
+      }
+      
+      // 类型守卫函数，用于检查对象是否符合API错误类型
+      const isApiError = (err: unknown): err is { 
+        message: string; 
+        response?: ApiErrorResponse;
+      } => {
+        return err !== null && typeof err === 'object' && 'message' in err;
+      };
+      
+      const errorMessage = isApiError(error) ? error.message : "未知错误";
 
       // 提取更详细的错误信息
       let detailedError = errorMessage;
-      if (error.response) {
+      
+      if (isApiError(error) && error.response) {
         const statusCode = error.response.status;
         detailedError = `请求失败 (${statusCode}): `;
 
         // 尝试提取响应中的错误信息
         if (error.response.data) {
           try {
-            const errorData =
-              typeof error.response.data === "string"
-                ? JSON.parse(error.response.data)
-                : error.response.data;
+            const errorData = typeof error.response.data === "string"
+              ? JSON.parse(error.response.data)
+              : error.response.data;
 
             if (errorData.error) {
               detailedError +=
@@ -173,8 +191,11 @@ export class ChatService {
                   ? JSON.stringify(errorData.error)
                   : errorData.error;
             }
-          } catch (e) {
-            detailedError += error.response.data.toString().substring(0, 100);
+          } catch (parseError) {
+            const responseStr = typeof error.response.data === 'object' 
+              ? JSON.stringify(error.response.data) 
+              : String(error.response.data);
+            detailedError += responseStr.substring(0, 100);
           }
         }
       }
@@ -252,26 +273,32 @@ export class ChatService {
           response.content
         );
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error(`穿甲弹发送异常:`, error);
-      const errorMessage = error.message || "发送穿甲弹失败";
+      // Safely access error properties
+      let errorMessageText = "发送穿甲弹失败";
+      if (error instanceof Error) {
+        errorMessageText = error.message;
+      }
 
-      // 提取更详细的错误信息
-      let detailedError = errorMessage;
-      if (error.response) {
-        detailedError += ` (状态码: ${error.response.status})`;
-        if (error.response.data) {
+      let detailedError = errorMessageText;
+      // Check if error is Axios-like error
+      // Assuming error might have a 'response' property like Axios errors
+      const potentialAxiosError = error as any;
+      if (potentialAxiosError?.response?.status && potentialAxiosError?.response?.data) {
+        detailedError += ` (状态码: ${potentialAxiosError.response.status})`;
+        if (potentialAxiosError.response.data) {
           try {
             const errorData =
-              typeof error.response.data === "string"
-                ? JSON.parse(error.response.data)
-                : error.response.data;
+              typeof potentialAxiosError.response.data === "string"
+                ? JSON.parse(potentialAxiosError.response.data)
+                : potentialAxiosError.response.data;
             if (errorData.error) {
-              detailedError += `: ${JSON.stringify(errorData.error)}`;
+              detailedError += `: ${typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error)}`;
             }
-          } catch (e) {
+          } catch (_ignoredJsonParseError) {
             // 解析错误，使用原始响应
-            detailedError += `: ${error.response.data}`;
+            detailedError += `: ${typeof potentialAxiosError.response.data === 'string' ? potentialAxiosError.response.data : JSON.stringify(potentialAxiosError.response.data)}`;
           }
         }
       }
@@ -370,54 +397,59 @@ export class ChatService {
           response.content
         );
       }
-    } catch (error: any) {
+   } catch (error) {
       console.error(`聊天发送异常:`, error);
-      let errorMessage = error.message || "未知错误";
+      let errorMessageText = "未知错误";
+      if (error instanceof Error) {
+        errorMessageText = error.message;
+      }
 
-      // 提取更详细的错误信息
-      if (error.response) {
-        const statusCode = error.response.status;
-        let detailedError = `请求失败 (${statusCode})`;
+      // Check if error is Axios-like error
+      // Assuming error might have a 'response' property like Axios errors
+      const potentialAxiosError = error as any;
+      if (potentialAxiosError?.response?.status && potentialAxiosError?.response?.data) {
+        const statusCode = potentialAxiosError.response.status;
+        let detailedErrorText = `请求失败 (${statusCode})`;
 
         // 针对常见HTTP错误给出友好提示
         if (statusCode === 401) {
-          detailedError = "API密钥无效或已过期，请更新您的密钥";
+          detailedErrorText = "API密钥无效或已过期，请更新您的密钥";
         } else if (statusCode === 404) {
-          detailedError = "模型不存在或API端点错误，请检查模型名称和API配置";
+          detailedErrorText = "模型不存在或API端点错误，请检查模型名称和API配置";
         } else if (statusCode === 400) {
-          detailedError = "请求参数错误，可能是模型配置不正确";
+          detailedErrorText = "请求参数错误，可能是模型配置不正确";
         } else if (statusCode === 429) {
-          detailedError = "达到API请求限制，请稍后再试";
+          detailedErrorText = "达到API请求限制，请稍后再试";
         } else if (statusCode >= 500) {
-          detailedError = "服务器错误，请稍后再试";
+          detailedErrorText = "服务器错误，请稍后再试";
         }
 
         // 尝试提取响应中的错误信息
-        if (error.response.data) {
+        if (potentialAxiosError.response.data) {
           try {
             const errorData =
-              typeof error.response.data === "string"
-                ? JSON.parse(error.response.data)
-                : error.response.data;
+              typeof potentialAxiosError.response.data === "string"
+                ? JSON.parse(potentialAxiosError.response.data)
+                : potentialAxiosError.response.data;
             if (errorData.error && typeof errorData.error === "object") {
-              detailedError += `: ${
+              detailedErrorText += `: \${
                 errorData.error.message || JSON.stringify(errorData.error)
               }`;
             } else if (errorData.error) {
-              detailedError += `: ${errorData.error}`;
+              detailedErrorText += `: ${errorData.error}`;
             }
-          } catch (e) {
+          } catch (_ignoredJsonParseError) {
             // 解析错误，使用原始响应
+            // detailedErrorText += `: ${typeof potentialAxiosError.response.data === 'string' ? potentialAxiosError.response.data.substring(0,100) : '[object]'}`;
           }
         }
-
-        errorMessage = detailedError;
+        errorMessageText = detailedErrorText;
       }
 
       store.addMessage(
         conversationId,
         MessageRole.Assistant,
-        `错误: ${errorMessage}`
+        `错误: ${errorMessageText}`
       );
     }
   }
