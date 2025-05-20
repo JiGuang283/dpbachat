@@ -73,11 +73,11 @@ export default function SettingsView() {
   const [modelToDelete, setModelToDelete] = useState<string | null>(null);
 
   // 初始化表单
-  const form = useForm<ModelFormValues>({
+  const form = useForm({
     resolver: zodResolver(modelFormSchema),
     defaultValues: {
       name: "",
-      type: "openai" as ModelType,
+      type: "openai",
       apiKey: "",
       baseUrl: "",
       model: "",
@@ -128,12 +128,16 @@ export default function SettingsView() {
     setDeleteDialogOpen(true);
   };
 
-  // 提交模型表单
+  // 表单提交处理
   const onSubmit = (data: ModelFormValues) => {
+    const modelData = {
+      ...data,
+      type: data.type as ModelType, // 转换为枚举类型
+    };
     if (editingModelId) {
-      updateModel(editingModelId, data);
+      updateModel(editingModelId, modelData);
     } else {
-      addModel(data);
+      addModel(modelData);
     }
     setIsModelDialogOpen(false);
   };
