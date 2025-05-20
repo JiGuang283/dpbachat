@@ -57,8 +57,6 @@ const modelFormSchema = z.object({
   apiKey: z.string().min(1, "请输入API密钥"),
   baseUrl: z.string().optional(),
   model: z.string().min(1, "请输入模型标识符"),
-  temperature: z.coerce.number().min(0).max(2).optional(),
-  maxTokens: z.coerce.number().min(100).max(100000).optional(),
   enabled: z.boolean().default(true),
 });
 
@@ -81,8 +79,6 @@ export default function SettingsView() {
       apiKey: "",
       baseUrl: "",
       model: "",
-      temperature: 0.7,
-      maxTokens: 2000,
       enabled: true,
     },
   });
@@ -114,8 +110,6 @@ export default function SettingsView() {
       apiKey: model.apiKey,
       baseUrl: model.baseUrl || "",
       model: model.model,
-      temperature: model.temperature || 0.7,
-      maxTokens: model.maxTokens || 2000,
       enabled: model.enabled,
     });
     setEditingModelId(model.id);
@@ -368,44 +362,6 @@ export default function SettingsView() {
                   </FormItem>
                 )}
               />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="temperature"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>温度</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="2"
-                          placeholder="0.7"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>0-2之间的值</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="maxTokens"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>最大令牌数</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="2000" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
 
               <FormField
                 control={form.control}
