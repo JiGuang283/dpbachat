@@ -333,45 +333,36 @@ export default function SettingsView() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>模型标识符</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <div className="space-y-2">
+                      {/* 改成自由输入 + 下拉选择的组合 */}
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="选择模型或输入自定义标识符" />
-                        </SelectTrigger>
+                        <Input
+                          placeholder="输入模型标识符"
+                          {...field}
+                          value={field.value || ""}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        {form.watch("type") !== "gemini" &&
-                          form.watch("type") !== "deepseek" && (
-                            <SelectItem value="custom">
-                              自定义模型标识符
-                            </SelectItem>
-                          )}
-                        {form.watch("type") &&
-                          getCommonModelsForType(
-                            form.watch("type") as ModelType
-                          ).map((model) => (
-                            <SelectItem key={model} value={model}>
-                              {model}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    {field.value === "custom" &&
-                      form.watch("type") !== "gemini" &&
-                      form.watch("type") !== "deepseek" && (
-                        <FormControl>
-                          <Input
-                            placeholder="输入自定义模型标识符"
-                            onChange={(e) => field.onChange(e.target.value)}
-                            className="mt-2"
-                          />
-                        </FormControl>
+                      {form.watch("type") && (
+                        <Select
+                          onValueChange={(value) => field.onChange(value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择常用模型" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getCommonModelsForType(form.watch("type") as ModelType).map(
+                              (model) => (
+                                <SelectItem key={model} value={model}>
+                                  {model}
+                                </SelectItem>
+                              )
+                            )}
+                          </SelectContent>
+                        </Select>
                       )}
+                    </div>
                     <FormDescription>
-                      {form.watch("type") === "gemini" ||
-                      form.watch("type") === "deepseek"
-                        ? "请从列表中选择预设模型标识符"
-                        : "选择预设模型或输入自定义模型标识符"}
+                      输入模型标识符，或从下拉列表中选择一个常用模型
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

@@ -48,7 +48,11 @@ export default function NewConversation() {
   const router = useRouter();
   const { models, presets, createConversation, creating } = useAppStore();
   const [isCreating, setIsCreating] = useState(false);
-  const [currentPreset, setCurrentPreset] = useState<null | { id: string; armoringPrompt: string; systemPrompt: string }>(null);
+  const [currentPreset, setCurrentPreset] = useState<null | {
+    id: string;
+    armoringPrompt: string;
+    systemPrompt: string;
+  }>(null);
 
   // 初始化表单
   const form = useForm<FormData>({

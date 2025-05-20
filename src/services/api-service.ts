@@ -15,7 +15,8 @@ interface ApiErrorResponse {
 /**
  * API错误类型定义
  */
-interface ApiError extends Error { // Ensure it extends Error for proper error handling
+interface ApiError extends Error {
+  // Ensure it extends Error for proper error handling
   response?: ApiErrorResponse;
 }
 
@@ -62,11 +63,9 @@ abstract class BaseApiService {
     // 类型守卫函数
     const isApiError = (err: unknown): err is ApiError => {
       return (
-        err !== null &&
-        typeof err === "object" &&
-        "message" in err 
+        err !== null && typeof err === "object" && "message" in err
         // Optionally, check for 'response' if it's a critical part of ApiError
-        // && (typeof (err as any).response === 'object' || (err as any).response === undefined) 
+        // && (typeof (err as any).response === 'object' || (err as any).response === undefined)
       );
     };
 
@@ -104,19 +103,19 @@ abstract class BaseApiService {
     // We assume error might have a response property.
     const potentialAxiosError = error as { response?: { status?: number } };
     if (potentialAxiosError?.response?.status) {
-        const status = potentialAxiosError.response.status;
-        if (status === 401) {
-            return `${defaultPrefix} API密钥无效或已过期`;
-        } else if (status === 404) {
-            return `${defaultPrefix} 模型不存在或API端点错误`;
-        } else if (status === 429) {
-            return `${defaultPrefix} 请求频率限制，请稍后再试`;
-        }
+      const status = potentialAxiosError.response.status;
+      if (status === 401) {
+        return `${defaultPrefix} API密钥无效或已过期`;
+      } else if (status === 404) {
+        return `${defaultPrefix} 模型不存在或API端点错误`;
+      } else if (status === 429) {
+        return `${defaultPrefix} 请求频率限制，请稍后再试`;
+      }
     }
-    
+
     // 如果 error 不是 Error 的实例，则返回通用未知错误
     if (error instanceof Error) {
-        return `${defaultPrefix} ${error.message || "未知错误"}`;
+      return `${defaultPrefix} ${error.message || "未知错误"}`;
     }
 
     return `${defaultPrefix} 未知错误`;
@@ -183,16 +182,6 @@ class DeepSeekService extends BaseApiService {
   async sendMessage(options: ApiCallOptions): Promise<ApiResponse> {
     try {
       const baseUrl = this.config.baseUrl || "https://api.deepseek.com/v1";
-      const validModels = ["deepseek-chat", "deepseek-reasoner"];
-
-      if (!validModels.includes(this.config.model)) {
-        return {
-          content: "",
-          error: `不支持的DeepSeek模型: ${
-            this.config.model
-          }。请使用: ${validModels.join(", ")}`,
-        };
-      }
 
       // 标准化消息格式
       const messages = options.messages.map((msg) => ({
@@ -200,9 +189,8 @@ class DeepSeekService extends BaseApiService {
         content: msg.content,
       }));
 
-      // 特殊处理 deepseek-reasoner 模型
+      // 特殊处理当最后一条消息不是用户消息时，添加一个用户消息作为结尾
       if (
-        this.config.model === "deepseek-reasoner" &&
         messages.length > 0 &&
         messages[messages.length - 1].role !== "user"
       ) {
@@ -249,20 +237,8 @@ class GeminiService extends BaseApiService {
       const baseUrl =
         this.config.baseUrl ||
         "https://generativelanguage.googleapis.com/v1beta";
-      const validModels = [
-        "gemini-2.5-flash-preview-04-17",
-        "gemini-2.5-pro-preview-05-06",
-        "gemini-2.0-flash",
-      ];
 
-      if (!validModels.includes(this.config.model)) {
-        return {
-          content: "",
-          error: `不支持的Gemini模型: ${
-            this.config.model
-          }。请使用: ${validModels.join(", ")}`,
-        };
-      }
+      // 移除了模型有效性检查，允许用户自由指定任何模型名称
 
       // Gemini特殊处理 - 转换为Gemini支持的消息格式
       const processedMessages = this.processGeminiMessages(options.messages);

@@ -152,28 +152,32 @@ export class ChatService {
       await new Promise((resolve) => setTimeout(resolve, 100));
     } catch (error) {
       console.error(`发送消息异常:`, error);
-      
+
       // 定义API错误响应接口
       interface ApiErrorResponse {
         status: number;
-        data: string | { 
-          error?: string | { message?: string };
-        };
+        data:
+          | string
+          | {
+              error?: string | { message?: string };
+            };
       }
-      
+
       // 类型守卫函数，用于检查对象是否符合API错误类型
-      const isApiError = (err: unknown): err is { 
-        message: string; 
+      const isApiError = (
+        err: unknown
+      ): err is {
+        message: string;
         response?: ApiErrorResponse;
       } => {
-        return err !== null && typeof err === 'object' && 'message' in err;
+        return err !== null && typeof err === "object" && "message" in err;
       };
-      
+
       const errorMessage = isApiError(error) ? error.message : "未知错误";
 
       // 提取更详细的错误信息
       let detailedError = errorMessage;
-      
+
       if (isApiError(error) && error.response) {
         const statusCode = error.response.status;
         detailedError = `请求失败 (${statusCode}): `;
@@ -181,9 +185,10 @@ export class ChatService {
         // 尝试提取响应中的错误信息
         if (error.response.data) {
           try {
-            const errorData = typeof error.response.data === "string"
-              ? JSON.parse(error.response.data)
-              : error.response.data;
+            const errorData =
+              typeof error.response.data === "string"
+                ? JSON.parse(error.response.data)
+                : error.response.data;
 
             if (errorData.error) {
               detailedError +=
@@ -279,8 +284,13 @@ export class ChatService {
       let detailedError = errorMessageText;
       // Check if error is Axios-like error
       // Assuming error might have a 'response' property like Axios errors
-      const potentialAxiosError = error as { response?: { status?: number; data?: unknown } }; // More specific type
-      if (potentialAxiosError?.response?.status && potentialAxiosError?.response?.data) {
+      const potentialAxiosError = error as {
+        response?: { status?: number; data?: unknown };
+      }; // More specific type
+      if (
+        potentialAxiosError?.response?.status &&
+        potentialAxiosError?.response?.data
+      ) {
         detailedError += ` (状态码: ${potentialAxiosError.response.status})`;
         if (potentialAxiosError.response.data) {
           try {
@@ -289,7 +299,11 @@ export class ChatService {
                 ? JSON.parse(potentialAxiosError.response.data)
                 : potentialAxiosError.response.data;
             if (errorData.error) {
-              detailedError += `: ${typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error)}`;
+              detailedError += `: ${
+                typeof errorData.error === "string"
+                  ? errorData.error
+                  : JSON.stringify(errorData.error)
+              }`;
             }
           } catch {} // 去除未使用变量 _ignoredJsonParseError
         }
@@ -389,7 +403,7 @@ export class ChatService {
           response.content
         );
       }
-   } catch (error) {
+    } catch (error) {
       console.error(`聊天发送异常:`, error);
       let errorMessageText = "未知错误";
       if (error instanceof Error) {
@@ -398,8 +412,13 @@ export class ChatService {
 
       // Check if error is Axios-like error
       // Assuming error might have a 'response' property like Axios errors
-      const potentialAxiosError = error as { response?: { status?: number; data?: unknown } }; // More specific type
-      if (potentialAxiosError?.response?.status && potentialAxiosError?.response?.data) {
+      const potentialAxiosError = error as {
+        response?: { status?: number; data?: unknown };
+      }; // More specific type
+      if (
+        potentialAxiosError?.response?.status &&
+        potentialAxiosError?.response?.data
+      ) {
         const statusCode = potentialAxiosError.response.status;
         let detailedErrorText = `请求失败 (${statusCode})`;
 
@@ -407,7 +426,8 @@ export class ChatService {
         if (statusCode === 401) {
           detailedErrorText = "API密钥无效或已过期，请更新您的密钥";
         } else if (statusCode === 404) {
-          detailedErrorText = "模型不存在或API端点错误，请检查模型名称和API配置";
+          detailedErrorText =
+            "模型不存在或API端点错误，请检查模型名称和API配置";
         } else if (statusCode === 400) {
           detailedErrorText = "请求参数错误，可能是模型配置不正确";
         } else if (statusCode === 429) {

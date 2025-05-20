@@ -14,14 +14,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  MessageSquare, 
-  Settings, 
-  Sparkles, 
-  Plus, 
-  CheckSquare, 
-  Trash, 
-  X 
+import {
+  MessageSquare,
+  Settings,
+  Sparkles,
+  Plus,
+  CheckSquare,
+  Trash,
+  X,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,8 +38,8 @@ import PresetsView from "@/components/presets/presets-view";
 
 export default function Home() {
   const router = useRouter();
-  const { 
-    currentConversationId, 
+  const {
+    currentConversationId,
     conversations,
     batchMode,
     selectedConversations,
@@ -47,9 +47,9 @@ export default function Home() {
     toggleSelectConversation,
     selectAllConversations,
     clearSelectedConversations,
-    deleteMultipleConversations
+    deleteMultipleConversations,
   } = useAppStore();
-  
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // 如果有当前对话，则自动选择聊天标签
@@ -92,7 +92,7 @@ export default function Home() {
   const createNewConversation = () => {
     router.push("/new-conversation");
   };
-  
+
   // 确认批量删除对话
   const confirmBatchDelete = () => {
     deleteMultipleConversations(selectedConversations);
@@ -136,12 +136,17 @@ export default function Home() {
                 {batchMode && selectedConversations.length > 0 && (
                   <div className="w-full flex justify-between items-center mb-4 p-3 bg-muted rounded-lg border border-muted-foreground/20">
                     <div className="flex items-center">
-                      <span className="font-medium">已选择 {selectedConversations.length} 个对话</span>
+                      <span className="font-medium">
+                        已选择 {selectedConversations.length} 个对话
+                      </span>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          if (selectedConversations.length === conversations.length) {
+                          if (
+                            selectedConversations.length ===
+                            conversations.length
+                          ) {
                             clearSelectedConversations();
                           } else {
                             selectAllConversations();
@@ -164,7 +169,7 @@ export default function Home() {
                     </Button>
                   </div>
                 )}
-                
+
                 {conversations.length === 0 ? (
                   <p>您还没有任何对话记录</p>
                 ) : (
@@ -175,20 +180,21 @@ export default function Home() {
                         className={`relative ${
                           batchMode ? "" : "cursor-pointer"
                         } ${
-                          selectedConversations.includes(conv.id) 
-                            ? "border-2 border-primary bg-primary/5" 
+                          selectedConversations.includes(conv.id)
+                            ? "border-2 border-primary bg-primary/5"
                             : ""
                         }`}
                         onClick={
                           batchMode
                             ? () => toggleSelectConversation(conv.id)
-                            : () => useAppStore.getState().setCurrentConversation(conv.id)
+                            : () =>
+                                useAppStore
+                                  .getState()
+                                  .setCurrentConversation(conv.id)
                         }
                       >
                         {batchMode && (
-                          <div
-                            className="absolute top-2 left-2 z-10"
-                          >
+                          <div className="absolute top-2 left-2 z-10">
                             <Checkbox
                               checked={selectedConversations.includes(conv.id)}
                               className="h-5 w-5"
@@ -215,7 +221,7 @@ export default function Home() {
                   <Plus className="mr-2 h-4 w-4" /> 新建对话
                 </Button>
                 {conversations.length > 0 && (
-                  <Button 
+                  <Button
                     variant={batchMode ? "destructive" : "outline"}
                     onClick={() => toggleBatchMode(!batchMode)}
                   >
@@ -250,7 +256,8 @@ export default function Home() {
           <DialogHeader>
             <DialogTitle>批量删除对话</DialogTitle>
             <DialogDescription>
-              确定要删除选中的 {selectedConversations.length} 个对话吗？此操作不可撤销。
+              确定要删除选中的 {selectedConversations.length}{" "}
+              个对话吗？此操作不可撤销。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -260,10 +267,7 @@ export default function Home() {
             >
               取消
             </Button>
-            <Button 
-              variant="destructive" 
-              onClick={confirmBatchDelete}
-            >
+            <Button variant="destructive" onClick={confirmBatchDelete}>
               删除
             </Button>
           </DialogFooter>

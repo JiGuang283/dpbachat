@@ -1,7 +1,13 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
-import { Conversation, Message, ModelConfig, Preset, MessageRole } from "@/types";
+import {
+  Conversation,
+  Message,
+  ModelConfig,
+  Preset,
+  MessageRole,
+} from "@/types";
 
 interface AppState {
   conversations: Conversation[];
@@ -21,7 +27,7 @@ interface AppState {
   deleteConversation: (id: string) => void;
   deleteMultipleConversations: (ids: string[]) => void; // 新增：批量删除对话
   setCurrentConversation: (id: string | null) => void;
-  
+
   // 选择操作
   toggleBatchMode: (enabled: boolean) => void; // 新增：切换批量模式
   toggleSelectConversation: (id: string) => void; // 新增：切换选择状态
@@ -111,7 +117,7 @@ export const useAppStore = create<AppState>()(
           conversations: state.conversations.filter(
             (conv) => !ids.includes(conv.id)
           ),
-          currentConversationId: ids.includes(state.currentConversationId || '')
+          currentConversationId: ids.includes(state.currentConversationId || "")
             ? null
             : state.currentConversationId,
           selectedConversations: [],
@@ -122,7 +128,7 @@ export const useAppStore = create<AppState>()(
       setCurrentConversation: (id) => {
         set({ currentConversationId: id });
       },
-      
+
       // 切换批量模式
       toggleBatchMode: (enabled) => {
         set((state) => ({

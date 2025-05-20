@@ -1,6 +1,6 @@
 import { ModelConfig, ModelType } from "@/types";
 
-// 验证模型配置的有效性
+// 验证模型配置的有效性 - 现在只进行基本验证和警告提示，不再强制要求模型标识符必须在预定义列表中
 export function validateModelConfig(config: ModelConfig): string | null {
   // 检查必要字段
   if (!config.apiKey || config.apiKey.trim() === "") {
@@ -8,94 +8,35 @@ export function validateModelConfig(config: ModelConfig): string | null {
   }
 
   if (!config.model || config.model.trim() === "") {
-    return "模型名称不能为空";
+    return "模型标识符不能为空";
   }
 
-  // 根据模型类型进行特定验证
-  switch (config.type) {
-    case ModelType.OpenAI:
-      return validateOpenAIConfig(config);
-    case ModelType.DeepSeek:
-      return validateDeepSeekConfig(config);
-    case ModelType.Gemini:
-      return validateGeminiConfig(config);
-    case ModelType.Claude:
-      return validateClaudeConfig(config);
-    default:
-      return "不支持的模型类型";
-  }
+  // 不再对模型名称做强制验证，已删除特定类型验证方法的调用
+  return null; // 验证通过
 }
 
-// 验证OpenAI模型配置
+// 验证OpenAI模型配置 - 改为只提供提示信息，不强制限制模型
 function validateOpenAIConfig(config: ModelConfig): string | null {
-  // 检查常见的OpenAI模型
-  const commonModels = [
-    "gpt-3.5-turbo",
-    "gpt-3.5-turbo-16k",
-    "gpt-4",
-    "gpt-4-turbo",
-    "gpt-4o",
-    "gpt-4o-mini",
-  ];
-
-  if (
-    !config.model.startsWith("gpt-") &&
-    !commonModels.includes(config.model)
-  ) {
-    return `警告: "${config.model}" 可能不是标准的OpenAI模型名称`;
-  }
-
-  return null; // 验证通过
+  // 这些方法保留但不再实际调用它们，只作为帮助信息的参考
+  return null;
 }
 
-// 验证DeepSeek模型配置
+// 验证DeepSeek模型配置 - 改为只提供提示信息，不强制限制模型
 function validateDeepSeekConfig(config: ModelConfig): string | null {
-  // 严格限制DeepSeek模型
-  const validModels = ["deepseek-chat", "deepseek-reasoner"];
-
-  if (!validModels.includes(config.model)) {
-    return `错误: "${config.model}" 不是支持的DeepSeek模型。仅支持以下模型: deepseek-chat、deepseek-reasoner`;
-  }
-
-  return null; // 验证通过
+  // 这些方法保留但不再实际调用它们，只作为帮助信息的参考
+  return null;
 }
 
-// 验证Gemini模型配置
+// 验证Gemini模型配置 - 改为只提供提示信息，不强制限制模型
 function validateGeminiConfig(config: ModelConfig): string | null {
-  // 检查常见的Gemini模型
-  const commonModels = [
-    "gemini-2.5-flash-preview-04-17",
-    "gemini-2.5-pro-preview-05-06",
-    "gemini-2.0-flash",
-  ];
-
-  if (!commonModels.includes(config.model)) {
-    return `警告: "${config.model}" 不是支持的Gemini模型名称。请使用以下模型之一: gemini-2.5-flash-preview-04-17, gemini-2.5-pro-preview-05-06, gemini-2.0-flash`;
-  }
-
-  return null; // 验证通过
+  // 这些方法保留但不再实际调用它们，只作为帮助信息的参考
+  return null;
 }
 
-// 验证Claude模型配置
+// 验证Claude模型配置 - 改为只提供提示信息，不强制限制模型
 function validateClaudeConfig(config: ModelConfig): string | null {
-  // 检查常见的Claude模型
-  const commonModels = [
-    "claude-instant-1",
-    "claude-2",
-    "claude-2.1",
-    "claude-3-opus",
-    "claude-3-sonnet",
-    "claude-3-haiku",
-  ];
-
-  if (
-    !commonModels.includes(config.model) &&
-    !config.model.includes("claude")
-  ) {
-    return `警告: "${config.model}" 可能不是有效的Claude模型名称`;
-  }
-
-  return null; // 验证通过
+  // 这些方法保留但不再实际调用它们，只作为帮助信息的参考
+  return null;
 }
 
 // 获取模型类型的显示名称
