@@ -191,7 +191,7 @@ export class ChatService {
                   ? JSON.stringify(errorData.error)
                   : errorData.error;
             }
-          } catch (parseError) {
+          } catch (_parseError) {
             const responseStr = typeof error.response.data === 'object' 
               ? JSON.stringify(error.response.data) 
               : String(error.response.data);
@@ -284,7 +284,7 @@ export class ChatService {
       let detailedError = errorMessageText;
       // Check if error is Axios-like error
       // Assuming error might have a 'response' property like Axios errors
-      const potentialAxiosError = error as any;
+      const potentialAxiosError = error as { response?: { status?: number; data?: any } }; // More specific type
       if (potentialAxiosError?.response?.status && potentialAxiosError?.response?.data) {
         detailedError += ` (状态码: ${potentialAxiosError.response.status})`;
         if (potentialAxiosError.response.data) {
@@ -296,7 +296,7 @@ export class ChatService {
             if (errorData.error) {
               detailedError += `: ${typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error)}`;
             }
-          } catch (_ignoredJsonParseError) {
+          } catch (_ignoredJsonParseError) { // Ensured it's correctly named
             // 解析错误，使用原始响应
             detailedError += `: ${typeof potentialAxiosError.response.data === 'string' ? potentialAxiosError.response.data : JSON.stringify(potentialAxiosError.response.data)}`;
           }
@@ -406,7 +406,7 @@ export class ChatService {
 
       // Check if error is Axios-like error
       // Assuming error might have a 'response' property like Axios errors
-      const potentialAxiosError = error as any;
+      const potentialAxiosError = error as { response?: { status?: number; data?: any } }; // More specific type
       if (potentialAxiosError?.response?.status && potentialAxiosError?.response?.data) {
         const statusCode = potentialAxiosError.response.status;
         let detailedErrorText = `请求失败 (${statusCode})`;
@@ -438,9 +438,9 @@ export class ChatService {
             } else if (errorData.error) {
               detailedErrorText += `: ${errorData.error}`;
             }
-          } catch (_ignoredJsonParseError) {
+          } catch (_ignoredJsonParseError) { // Ensured it's correctly named
             // 解析错误，使用原始响应
-            // detailedErrorText += `: ${typeof potentialAxiosError.response.data === 'string' ? potentialAxiosError.response.data.substring(0,100) : '[object]'}`;
+            // detailedErrorText += \\`: \\${typeof potentialAxiosError.response.data === \'string\' ? potentialAxiosError.response.data.substring(0,100) : \'[object]\'}\\`;
           }
         }
         errorMessageText = detailedErrorText;

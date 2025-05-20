@@ -100,9 +100,9 @@ abstract class BaseApiService {
     }
 
     // 如果不是 ApiError 或者没有提取到特定消息，则使用通用 HTTP 状态码提示
-    // This part requires error to be 'any' or to have a more specific Axios-like error type
-    // For now, we'll assume it might have a response property if not an ApiError
-    const potentialAxiosError = error as any;
+    // This part requires error to be of a type that allows property access, or use type guards.
+    // We assume error might have a response property.
+    const potentialAxiosError = error as { response?: { status?: number } };
     if (potentialAxiosError?.response?.status) {
         const status = potentialAxiosError.response.status;
         if (status === 401) {
