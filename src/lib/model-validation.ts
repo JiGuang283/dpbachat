@@ -11,32 +11,8 @@ export function validateModelConfig(config: ModelConfig): string | null {
     return "模型标识符不能为空";
   }
 
-  // 不再对模型名称做强制验证，已删除特定类型验证方法的调用
+  // 不再对模型名称做强制验证
   return null; // 验证通过
-}
-
-// 验证OpenAI模型配置 - 改为只提供提示信息，不强制限制模型
-function validateOpenAIConfig(config: ModelConfig): string | null {
-  // 这些方法保留但不再实际调用它们，只作为帮助信息的参考
-  return null;
-}
-
-// 验证DeepSeek模型配置 - 改为只提供提示信息，不强制限制模型
-function validateDeepSeekConfig(config: ModelConfig): string | null {
-  // 这些方法保留但不再实际调用它们，只作为帮助信息的参考
-  return null;
-}
-
-// 验证Gemini模型配置 - 改为只提供提示信息，不强制限制模型
-function validateGeminiConfig(config: ModelConfig): string | null {
-  // 这些方法保留但不再实际调用它们，只作为帮助信息的参考
-  return null;
-}
-
-// 验证Claude模型配置 - 改为只提供提示信息，不强制限制模型
-function validateClaudeConfig(config: ModelConfig): string | null {
-  // 这些方法保留但不再实际调用它们，只作为帮助信息的参考
-  return null;
 }
 
 // 获取模型类型的显示名称

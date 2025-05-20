@@ -350,13 +350,13 @@ export default function SettingsView() {
                             <SelectValue placeholder="选择常用模型" />
                           </SelectTrigger>
                           <SelectContent>
-                            {getCommonModelsForType(form.watch("type") as ModelType).map(
-                              (model) => (
-                                <SelectItem key={model} value={model}>
-                                  {model}
-                                </SelectItem>
-                              )
-                            )}
+                            {getCommonModelsForType(
+                              form.watch("type") as ModelType
+                            ).map((model) => (
+                              <SelectItem key={model} value={model}>
+                                {model}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       )}
