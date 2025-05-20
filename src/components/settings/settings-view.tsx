@@ -83,15 +83,12 @@ export default function SettingsView() {
     },
   });
 
-  // 监听模型类型变化，更新模型列表
+  // 监听模型类型变化
   const modelType = form.watch("type");
   useEffect(() => {
     if (modelType) {
-      const commonModels = getCommonModelsForType(modelType as ModelType);
-      if (commonModels.length > 0) {
-        // 设置为该类型的第一个常用模型
-        form.setValue("model", commonModels[0]);
-      }
+      // 不再自动设置模型标识符
+      // 让用户自行输入
     }
   }, [modelType, form]);
 
@@ -327,36 +324,34 @@ export default function SettingsView() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>模型标识符</FormLabel>
-                    <div className="space-y-2">
-                      {/* 改成自由输入 + 下拉选择的组合 */}
-                      <FormControl>
-                        <Input
-                          placeholder="输入模型标识符"
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      {form.watch("type") && (
-                        <Select
-                          onValueChange={(value) => field.onChange(value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="选择常用模型" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getCommonModelsForType(
-                              form.watch("type") as ModelType
-                            ).map((model) => (
-                              <SelectItem key={model} value={model}>
-                                {model}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
+                    <FormControl>
+                      <Input
+                        placeholder="输入模型标识符"
+                        {...field}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    {form.watch("type") && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium mb-1">推荐模型:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {getCommonModelsForType(form.watch("type") as ModelType).map((model) => (
+                            <Button
+                              key={model}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="text-xs"
+                              onClick={() => field.onChange(model)}
+                            >
+                              {model}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <FormDescription>
-                      输入模型标识符，或从下拉列表中选择一个常用模型
+                      请选择或输入模型标识符
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

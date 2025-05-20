@@ -53,12 +53,8 @@ export function getCommonModelsForType(type: ModelType): string[] {
       ];
     case ModelType.Claude:
       return [
-        "claude-instant-1",
-        "claude-2",
-        "claude-2.1",
-        "claude-3-opus",
-        "claude-3-sonnet",
-        "claude-3-haiku",
+        "claude-3-7-sonnet-latest",
+        "claude-3-5-haiku-latest",
       ];
     default:
       return [];
