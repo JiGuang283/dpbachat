@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "多模型聊天应用",
-  description: "支持多种语言模型的AI聊天应用",
+  title: "Dpbachat",
+  description: "Dpbachat - 支持多种语言模型的AI聊天应用",
 };
 
 export default function RootLayout({

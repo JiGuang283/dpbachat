@@ -102,7 +102,7 @@ export default function Home() {
   return (
     <div className="container mx-auto py-6 h-screen flex flex-col">
       <header className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">多模型聊天应用</h1>
+        <h1 className="text-3xl font-bold">Dpbachat</h1>
         <Button onClick={createNewConversation}>
           <Plus className="mr-2 h-4 w-4" /> 新建对话
         </Button>
