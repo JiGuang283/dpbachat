@@ -1,103 +1,274 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { ModelType } from "@/types";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { 
+  MessageSquare, 
+  Settings, 
+  Sparkles, 
+  Plus, 
+  CheckSquare, 
+  Trash, 
+  X 
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useAppStore } from "@/store";
+import ChatView from "@/components/chat/chat-view";
+import SettingsView from "@/components/settings/settings-view";
+import PresetsView from "@/components/presets/presets-view";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const router = useRouter();
+  const { 
+    currentConversationId, 
+    conversations,
+    batchMode,
+    selectedConversations,
+    toggleBatchMode,
+    toggleSelectConversation,
+    selectAllConversations,
+    clearSelectedConversations,
+    deleteMultipleConversations
+  } = useAppStore();
+  
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  // 如果有当前对话，则自动选择聊天标签
+  const defaultTab = currentConversationId ? "chat" : "settings";
+
+  useEffect(() => {
+    // 页面加载后，检查是否需要创建初始数据
+    const initializeData = async () => {
+      const store = useAppStore.getState();
+
+      // 如果没有模型配置，添加一个默认的OpenAI配置
+      if (store.models.length === 0) {
+        store.addModel({
+          name: "OpenAI (请配置)",
+          type: ModelType.OpenAI,
+          apiKey: "",
+          model: "gpt-3.5-turbo",
+          temperature: 0.7,
+          maxTokens: 2000,
+          enabled: false,
+        });
+      }
+
+      // 如果没有预设，添加一个示例预设
+      if (store.presets.length === 0) {
+        store.addPreset({
+          name: "基础助手示例",
+          armoringPrompt:
+            "请确认你理解了这条消息，并告诉我你将作为一个友好、乐于助人的AI助手为我服务。",
+          systemPrompt:
+            "你是一个有用的AI助手，请提供清晰、准确、有帮助的回答。",
+        });
+      }
+    };
+
+    initializeData();
+  }, []);
+
+  // 创建新对话
+  const createNewConversation = () => {
+    router.push("/new-conversation");
+  };
+  
+  // 确认批量删除对话
+  const confirmBatchDelete = () => {
+    deleteMultipleConversations(selectedConversations);
+    setDeleteDialogOpen(false);
+  };
+
+  return (
+    <div className="container mx-auto py-6 h-screen flex flex-col">
+      <header className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">多模型聊天应用</h1>
+        <Button onClick={createNewConversation}>
+          <Plus className="mr-2 h-4 w-4" /> 新建对话
+        </Button>
+      </header>
+
+      <Tabs defaultValue={defaultTab} className="flex-1 flex flex-col">
+        <TabsList className="grid w-full grid-cols-3 mb-8">
+          <TabsTrigger value="chat">
+            <MessageSquare className="mr-2 h-4 w-4" /> 聊天
+          </TabsTrigger>
+          <TabsTrigger value="presets">
+            <Sparkles className="mr-2 h-4 w-4" /> 预设
+          </TabsTrigger>
+          <TabsTrigger value="settings">
+            <Settings className="mr-2 h-4 w-4" /> 设置
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="chat" className="flex-1 overflow-hidden">
+          {currentConversationId ? (
+            <ChatView />
+          ) : (
+            <Card className="text-center p-6">
+              <CardHeader>
+                <CardTitle>没有进行中的对话</CardTitle>
+                <CardDescription>
+                  创建一个新的对话或选择已有对话
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center">
+                {batchMode && selectedConversations.length > 0 && (
+                  <div className="w-full flex justify-between items-center mb-4 p-3 bg-muted rounded-lg border border-muted-foreground/20">
+                    <div className="flex items-center">
+                      <span className="font-medium">已选择 {selectedConversations.length} 个对话</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedConversations.length === conversations.length) {
+                            clearSelectedConversations();
+                          } else {
+                            selectAllConversations();
+                          }
+                        }}
+                        className="ml-2"
+                      >
+                        {selectedConversations.length === conversations.length
+                          ? "取消全选"
+                          : "全选"}
+                      </Button>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setDeleteDialogOpen(true)}
+                      className="flex items-center"
+                    >
+                      <Trash className="mr-2 h-4 w-4" /> 批量删除
+                    </Button>
+                  </div>
+                )}
+                
+                {conversations.length === 0 ? (
+                  <p>您还没有任何对话记录</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl">
+                    {conversations.map((conv) => (
+                      <Card
+                        key={conv.id}
+                        className={`relative ${
+                          batchMode ? "" : "cursor-pointer"
+                        } ${
+                          selectedConversations.includes(conv.id) 
+                            ? "border-2 border-primary bg-primary/5" 
+                            : ""
+                        }`}
+                        onClick={
+                          batchMode
+                            ? () => toggleSelectConversation(conv.id)
+                            : () => useAppStore.getState().setCurrentConversation(conv.id)
+                        }
+                      >
+                        {batchMode && (
+                          <div
+                            className="absolute top-2 left-2 z-10"
+                          >
+                            <Checkbox
+                              checked={selectedConversations.includes(conv.id)}
+                              className="h-5 w-5"
+                            />
+                          </div>
+                        )}
+                        <CardHeader>
+                          <CardTitle className="truncate">
+                            {conv.title}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardFooter>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(conv.updatedAt).toLocaleString()}
+                          </p>
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+              <CardFooter className="flex justify-center space-x-4">
+                <Button onClick={createNewConversation}>
+                  <Plus className="mr-2 h-4 w-4" /> 新建对话
+                </Button>
+                {conversations.length > 0 && (
+                  <Button 
+                    variant={batchMode ? "destructive" : "outline"}
+                    onClick={() => toggleBatchMode(!batchMode)}
+                  >
+                    {batchMode ? (
+                      <>
+                        <X className="mr-2 h-4 w-4" /> 取消批量
+                      </>
+                    ) : (
+                      <>
+                        <CheckSquare className="mr-2 h-4 w-4" /> 批量管理
+                      </>
+                    )}
+                  </Button>
+                )}
+              </CardFooter>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="presets" className="flex-1 overflow-auto">
+          <PresetsView />
+        </TabsContent>
+
+        <TabsContent value="settings" className="flex-1 overflow-auto">
+          <SettingsView />
+        </TabsContent>
+      </Tabs>
+
+      {/* 批量删除确认对话框 */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>批量删除对话</DialogTitle>
+            <DialogDescription>
+              确定要删除选中的 {selectedConversations.length} 个对话吗？此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmBatchDelete}
+            >
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

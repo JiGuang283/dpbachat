@@ -1,8 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 多模型聊天应用
 
-## Getting Started
+一个基于 Next.js 和 TypeScript 构建的应用程序，允许用户自定义语言模型 API 配置，支持多种语言模型（DeepSeek、Gemini、Claude 和 OpenAI）进行聊天交互，并提供预设配置功能。
 
-First, run the development server:
+## 功能特点
+
+1. **多模型支持**
+
+   - 支持配置多种 AI 语言模型 API：OpenAI、DeepSeek、Gemini 和 Claude
+   - 用户可自行管理 API 密钥和配置
+
+2. **预设系统**
+
+   - 预设分为"穿甲弹"和"预设"两部分
+   - 先向 AI 发送预设，等待返回后再开始对话
+   - 用户可自定义预设名称和内容并保存
+   - 创建对话时可选择模型和预设
+
+3. **对话管理**
+   - 以对话为管理单元
+   - 保存历史对话记录
+   - 支持创建、删除和编辑对话
+
+## 技术栈
+
+- **前端框架**: Next.js + React 19
+- **语言**: TypeScript
+- **样式**: TailwindCSS + Shadcn UI
+- **状态管理**: Zustand
+- **表单处理**: React Hook Form + Zod
+- **API 调用**: Axios
+
+## 开始使用
+
+首先，运行开发服务器:
 
 ```bash
 npm run dev
@@ -14,23 +44,31 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 [http://localhost:3000](http://localhost:3000) 查看应用运行效果。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 项目结构
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/                 # Next.js应用目录
+│   ├── api/             # API路由
+│   └── (routes)/        # 页面路由
+├── components/          # UI组件
+│   ├── ui/              # 基础UI组件
+│   └── (feature)/       # 功能组件
+├── lib/                 # 工具函数
+├── types/               # TypeScript类型定义
+├── store/               # 状态管理
+└── services/            # API服务
+```
 
-## Learn More
+## 配置模型
 
-To learn more about Next.js, take a look at the following resources:
+应用支持以下 AI 语言模型：
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **OpenAI**: GPT-3.5/GPT-4 系列
+- **DeepSeek**: DeepSeek 系列模型
+- **Gemini**: Google 的 Gemini 模型
+- **Claude**: Anthropic 的 Claude 模型
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+每个模型都需要配置对应的 API 密钥和基本参数。
