@@ -153,7 +153,7 @@ class OpenAIService extends BaseApiService {
           model: this.config.model,
           messages: messages,
           temperature: options.temperature ?? this.config.temperature ?? 0.7,
-          max_tokens: options.maxTokens ?? this.config.maxTokens ?? 2000,
+          // max_tokens 参数已移除
         },
         {
           headers: {
@@ -207,7 +207,7 @@ class DeepSeekService extends BaseApiService {
           model: this.config.model,
           messages: messages,
           temperature: options.temperature ?? this.config.temperature ?? 0.7,
-          max_tokens: options.maxTokens ?? this.config.maxTokens,
+          // max_tokens 参数已移除
         },
         {
           headers: {
@@ -255,7 +255,7 @@ class GeminiService extends BaseApiService {
           contents,
           generationConfig: {
             temperature: options.temperature ?? this.config.temperature ?? 0.7,
-            maxOutputTokens: options.maxTokens ?? this.config.maxTokens,
+            // maxOutputTokens 参数已移除
           },
         },
         {
@@ -388,7 +388,7 @@ class ClaudeService extends BaseApiService {
           model: this.config.model,
           messages: messages,
           temperature: options.temperature ?? this.config.temperature ?? 0.7,
-          max_tokens: options.maxTokens ?? this.config.maxTokens,
+          // max_tokens 参数已移除
         },
         {
           headers: {
