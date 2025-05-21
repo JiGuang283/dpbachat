@@ -335,7 +335,9 @@ export default function SettingsView() {
                       <div className="mt-2">
                         <p className="text-sm font-medium mb-1">推荐模型:</p>
                         <div className="flex flex-wrap gap-2">
-                          {getCommonModelsForType(form.watch("type") as ModelType).map((model) => (
+                          {getCommonModelsForType(
+                            form.watch("type") as ModelType
+                          ).map((model) => (
                             <Button
                               key={model}
                               type="button"
@@ -350,9 +352,7 @@ export default function SettingsView() {
                         </div>
                       </div>
                     )}
-                    <FormDescription>
-                      请选择或输入模型标识符
-                    </FormDescription>
+                    <FormDescription>请选择或输入模型标识符</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAppStore } from "@/store";
+// 重新导入 ChatService 以解决导入错误
 import { ChatService } from "@/services/chat-service";
 import { LoadingAnimation } from "@/components/ui/loading-animation";
 import { Loader2, Send, ArrowLeft, Trash } from "lucide-react";

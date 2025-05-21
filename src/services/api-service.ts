@@ -2,6 +2,15 @@ import axios from "axios";
 import { ApiCallOptions, ApiResponse, ModelConfig, ModelType } from "@/types";
 
 /**
+ * 通用API请求配置 - 增加超时和响应大小处理
+ */
+const API_REQUEST_CONFIG = {
+  timeout: 180000, // 2分钟超时
+  maxContentLength: Infinity, // 不限制响应大小
+  maxBodyLength: Infinity, // 不限制请求体大小
+};
+
+/**
  * API错误响应类型定义
  */
 interface ApiErrorResponse {
@@ -160,6 +169,7 @@ class OpenAIService extends BaseApiService {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.config.apiKey}`,
           },
+          ...API_REQUEST_CONFIG, // 使用通用请求配置增加超时和大小限制
         }
       );
 
@@ -214,6 +224,7 @@ class DeepSeekService extends BaseApiService {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.config.apiKey}`,
           },
+          ...API_REQUEST_CONFIG, // 使用通用请求配置增加超时和大小限制
         }
       );
 
@@ -263,6 +274,7 @@ class GeminiService extends BaseApiService {
             "Content-Type": "application/json",
             "x-goog-api-key": this.config.apiKey,
           },
+          ...API_REQUEST_CONFIG, // 使用通用请求配置增加超时和大小限制
         }
       );
 
@@ -396,6 +408,7 @@ class ClaudeService extends BaseApiService {
             "x-api-key": this.config.apiKey,
             "anthropic-version": "2023-06-01",
           },
+          ...API_REQUEST_CONFIG, // 使用通用请求配置增加超时和大小限制
         }
       );
 

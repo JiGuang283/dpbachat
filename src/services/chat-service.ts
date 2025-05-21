@@ -11,7 +11,9 @@ import {
 } from "@/types";
 
 export class ChatService {
-  // 发送预设并等待AI响应
+  /**
+   * 发送预设并等待AI响应
+   */
   static async initializeWithPreset(
     conversation: Conversation,
     model: ModelConfig,
@@ -83,7 +85,9 @@ export class ChatService {
     }
   }
 
-  // 辅助方法：发送对话中最后一条用户消息并等待AI回复
+  /**
+   * 辅助方法：发送对话中最后一条用户消息并等待AI回复
+   */
   private static async sendSingleMessageAndWait(
     conversationId: string,
     model: ModelConfig
@@ -169,6 +173,7 @@ export class ChatService {
       ): err is {
         message: string;
         response?: ApiErrorResponse;
+        code?: string;
       } => {
         return err !== null && typeof err === "object" && "message" in err;
       };
@@ -178,6 +183,13 @@ export class ChatService {
       // 提取更详细的错误信息
       let detailedError = errorMessage;
 
+      // 处理网络错误和超时错误
+      if (isApiError(error) && error.code === "ECONNABORTED") {
+        detailedError =
+          "请求超时，模型生成响应时间过长。请尝试减少输入内容或分批发送消息";
+      } else if (isApiError(error) && error.code === "ERR_NETWORK") {
+        detailedError = "网络连接错误，请检查您的网络连接并重试";
+      }
       if (isApiError(error) && error.response) {
         const statusCode = error.response.status;
         detailedError = `请求失败 (${statusCode}): `;
@@ -208,7 +220,9 @@ export class ChatService {
     }
   }
 
-  // 发送穿甲弹并等待AI响应
+  /**
+   * 发送穿甲弹并等待AI响应
+   */
   private static async sendArmoringPrompt(
     conversationId: string,
     model: ModelConfig,
@@ -286,8 +300,17 @@ export class ChatService {
       // Assuming error might have a 'response' property like Axios errors
       const potentialAxiosError = error as {
         response?: { status?: number; data?: unknown };
+        code?: string;
+        message?: string;
       }; // More specific type
-      if (
+
+      // 处理网络错误和超时错误
+      if (potentialAxiosError.code === "ECONNABORTED") {
+        detailedError =
+          "请求超时，模型生成响应时间过长。请尝试减少输入内容或分批发送消息";
+      } else if (potentialAxiosError.code === "ERR_NETWORK") {
+        detailedError = "网络连接错误，请检查您的网络连接并重试";
+      } else if (
         potentialAxiosError?.response?.status &&
         potentialAxiosError?.response?.data
       ) {
@@ -325,7 +348,9 @@ export class ChatService {
     }
   }
 
-  // 发送常规消息
+  /**
+   * 发送常规消息
+   */
   static async sendMessage(
     conversationId: string,
     content: string
@@ -414,8 +439,17 @@ export class ChatService {
       // Assuming error might have a 'response' property like Axios errors
       const potentialAxiosError = error as {
         response?: { status?: number; data?: unknown };
+        code?: string;
+        message?: string;
       }; // More specific type
-      if (
+
+      // 处理网络错误和超时错误
+      if (potentialAxiosError.code === "ECONNABORTED") {
+        errorMessageText =
+          "请求超时，模型生成响应时间过长。请尝试减少输入内容或分批发送消息";
+      } else if (potentialAxiosError.code === "ERR_NETWORK") {
+        errorMessageText = "网络连接错误，请检查您的网络连接并重试";
+      } else if (
         potentialAxiosError?.response?.status &&
         potentialAxiosError?.response?.data
       ) {
@@ -444,7 +478,7 @@ export class ChatService {
                 ? JSON.parse(potentialAxiosError.response.data)
                 : potentialAxiosError.response.data;
             if (errorData.error && typeof errorData.error === "object") {
-              detailedErrorText += `: \${
+              detailedErrorText += `: ${
                 errorData.error.message || JSON.stringify(errorData.error)
               }`;
             } else if (errorData.error) {
