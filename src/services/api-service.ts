@@ -616,11 +616,11 @@ class GeminiService extends BaseApiService {
               );
             }
           }
-        } catch (e) {
-          if (e instanceof Error && e.message.includes("Gemini内容被过滤")) {
-            throw e;
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("Gemini内容被过滤")) {
+            throw error;
           }
-          console.warn("无法解析Gemini流式数据", e);
+          console.warn("无法解析Gemini流式数据", error);
         }
       }
     } catch (error) {

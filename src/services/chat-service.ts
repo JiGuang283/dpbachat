@@ -2,7 +2,7 @@
 import { createApiService } from "./api-service";
 import { useAppStore } from "@/store";
 import {
-  ApiCallOptions,
+  // ApiCallOptions, // 未使用，暂时注释
   Conversation,
   // Message, // 未使用，暂时注释
   MessageRole,
