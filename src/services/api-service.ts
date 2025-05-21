@@ -293,8 +293,8 @@ class OpenAIService extends BaseApiService {
                 fullContent += content;
                 onStream(fullContent, false);
               }
-            } catch (e) {
-              console.warn("无法解析OpenAI流式数据", e);
+            } catch (error) {
+              console.warn("无法解析OpenAI流式数据", error);
             }
           }
         }
@@ -445,8 +445,8 @@ class DeepSeekService extends BaseApiService {
                 fullContent += content;
                 onStream(fullContent, false);
               }
-            } catch (e) {
-              console.warn("无法解析DeepSeek流式数据", e);
+            } catch (error) {
+              console.warn("无法解析DeepSeek流式数据", error);
             }
           }
         }
@@ -594,7 +594,7 @@ class GeminiService extends BaseApiService {
             .map((line) => {
               try {
                 return JSON.parse(line);
-              } catch (_) {
+              } catch {
                 // 忽略解析错误，返回 null
                 return null;
               }
@@ -840,8 +840,8 @@ class ClaudeService extends BaseApiService {
                 // 消息结束
                 onStream(fullContent, true);
               }
-            } catch (e) {
-              console.warn("无法解析Claude流式数据", e);
+            } catch (error) {
+              console.warn("无法解析Claude流式数据", error);
             }
           }
         }
