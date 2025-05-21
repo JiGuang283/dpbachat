@@ -594,7 +594,8 @@ class GeminiService extends BaseApiService {
             .map((line) => {
               try {
                 return JSON.parse(line);
-              } catch (e) {
+              } catch (_) {
+                // 忽略解析错误，返回 null
                 return null;
               }
             })
