@@ -574,6 +574,21 @@ class GeminiService extends BaseApiService {
       let fullContent = "";
       let buffer = ""; // Buffer for incomplete JSON lines
 
+      // 定义Gemini流式响应对象的接口
+      interface GeminiStreamResponseObject {
+        promptFeedback?: {
+          blockReason?: string;
+        };
+        candidates?: Array<{
+          content?: {
+            parts?: Array<{
+              text?: string;
+            }>;
+          };
+        }>;
+        // Gemini API 可能还包含其他字段，根据需要添加
+      }
+
       // 处理流式响应
       while (true) {
         const { done, value } = await reader.read();
@@ -583,13 +598,12 @@ class GeminiService extends BaseApiService {
           if (buffer.trim()) {
             try {
               const parsedData = JSON.parse(buffer);
-              let responsesToProcess: any[] = [];
+              let responsesToProcess: GeminiStreamResponseObject[] = [];
 
               if (Array.isArray(parsedData)) {
-                responsesToProcess = parsedData;
+                responsesToProcess = parsedData as GeminiStreamResponseObject[];
               } else if (typeof parsedData === 'object' && parsedData !== null) {
-                // Handle if buffer was a single JSON object (e.g. if not an array stream)
-                responsesToProcess = [parsedData];
+                responsesToProcess = [parsedData as GeminiStreamResponseObject];
               }
 
               for (const responseObject of responsesToProcess) {
