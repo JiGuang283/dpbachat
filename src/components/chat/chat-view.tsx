@@ -9,7 +9,7 @@ import { useAppStore } from "@/store";
 // 重新导入 ChatService 以解决导入错误
 import { ChatService } from "@/services/chat-service";
 import { LoadingAnimation } from "@/components/ui/loading-animation";
-import { Loader2, Send, ArrowLeft, Trash } from "lucide-react";
+import { Loader2, Send, ArrowLeft, Trash, Zap } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { MessageRole } from "@/types";
 
 export default function ChatView() {
@@ -33,6 +35,8 @@ export default function ChatView() {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [useStreamingMode, setUseStreamingMode] = useState(true);
+  const [streamingContent, setStreamingContent] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -73,14 +77,31 @@ export default function ChatView() {
   // 发送消息
   const sendMessage = async () => {
     if (!message.trim() || sending) return;
+    const messageContent = message.trim();
+    setMessage(""); // 立即清空输入框
 
     try {
       setSending(true);
-      await ChatService.sendMessage(conversation.id, message.trim());
-      setMessage("");
+      setStreamingContent(""); // 重置流式内容
+
+      if (useStreamingMode) {
+        // 使用流式传输
+        await ChatService.sendMessageStream(
+          conversation.id,
+          messageContent,
+          (content, isComplete) => {
+            setStreamingContent(content);
+            if (isComplete) {
+              setSending(false);
+            }
+          }
+        );
+      } else {
+        // 使用常规传输
+        await ChatService.sendMessage(conversation.id, messageContent);
+      }
     } catch (error) {
       console.error("发送消息失败:", error);
-    } finally {
       setSending(false);
     }
   };
@@ -154,6 +175,18 @@ export default function ChatView() {
           <span className="text-sm text-muted-foreground">
             模型: {modelName}
           </span>
+          <div className="flex items-center mr-2">
+            <Switch
+              id="streamMode"
+              checked={useStreamingMode}
+              onCheckedChange={setUseStreamingMode}
+              className="mr-2"
+            />
+            <Label htmlFor="streamMode" className="flex items-center text-sm">
+              <Zap className="h-4 w-4 mr-1" />
+              流式传输
+            </Label>
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -172,15 +205,29 @@ export default function ChatView() {
             </div>
           ) : (
             <div className="space-y-4">
-              {conversation.messages.map((msg) => (
+              {conversation.messages.map((msg, index) => (
                 <div
                   key={msg.id}
                   className={`rounded-lg p-4 ${getMessageStyle(msg.role)}`}
                 >
                   <div className="font-semibold mb-1">
                     {getMessageRoleName(msg.role)}
+                    {sending &&
+                      index === conversation.messages.length - 1 &&
+                      msg.role === MessageRole.Assistant && (
+                        <span className="ml-2 text-xs font-normal animate-pulse">
+                          正在生成...
+                        </span>
+                      )}
                   </div>
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <div className="whitespace-pre-wrap">
+                    {sending &&
+                    index === conversation.messages.length - 1 &&
+                    msg.role === MessageRole.Assistant &&
+                    useStreamingMode
+                      ? streamingContent
+                      : msg.content}
+                  </div>
                 </div>
               ))}
               <div ref={messagesEndRef} />

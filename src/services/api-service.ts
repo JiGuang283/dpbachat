@@ -2,6 +2,25 @@ import axios from "axios";
 import { ApiCallOptions, ApiResponse, ModelConfig, ModelType } from "@/types";
 
 /**
+ * 流式响应处理函数
+ */
+export type StreamResponseHandler = (
+  chunk: string,
+  isComplete: boolean
+) => void;
+
+/**
+ * API错误响应类型定义
+ */
+interface ApiErrorResponse {
+  status?: number;
+  data?: {
+    error?: { message?: string } | string;
+    message?: string;
+  };
+}
+
+/**
  * 通用API请求配置 - 增加超时和响应大小处理
  */
 const API_REQUEST_CONFIG = {
@@ -134,6 +153,14 @@ abstract class BaseApiService {
    * 发送消息到语言模型 - 子类必须实现此方法
    */
   abstract sendMessage(options: ApiCallOptions): Promise<ApiResponse>;
+
+  /**
+   * 使用流式传输发送消息到语言模型 - 子类必须实现此方法
+   */
+  abstract sendMessageStream(
+    options: ApiCallOptions,
+    onStream: StreamResponseHandler
+  ): Promise<void>;
 }
 
 /**
@@ -181,6 +208,101 @@ class OpenAIService extends BaseApiService {
     } catch (error) {
       console.error("OpenAI API调用失败:", error);
       return { content: "", error: this.extractErrorMessage(error, "OpenAI") };
+    }
+  }
+
+  async sendMessageStream(
+    options: ApiCallOptions,
+    onStream: StreamResponseHandler
+  ): Promise<void> {
+    try {
+      const baseUrl = this.config.baseUrl || "https://api.openai.com/v1";
+
+      if (!this.config.model) {
+        onStream("", true);
+        throw new Error("未指定OpenAI模型名称");
+      }
+
+      // 标准化消息格式
+      const messages = options.messages.map((msg) => ({
+        role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
+        content: msg.content,
+      }));
+
+      console.log(
+        `OpenAI流式请求(${this.config.model}): ${messages.length}条消息`
+      );
+
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: messages,
+          temperature: options.temperature ?? this.config.temperature ?? 0.7,
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage =
+          errorData.error?.message || `HTTP error! status: ${response.status}`;
+        onStream("", true);
+        throw new Error(`OpenAI API错误: ${errorMessage}`);
+      }
+
+      if (!response.body) {
+        onStream("", true);
+        throw new Error("OpenAI返回了空响应流");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let fullContent = "";
+
+      // 处理流式响应
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          onStream(fullContent, true);
+          break;
+        }
+
+        // 解码接收到的数据
+        const chunk = decoder.decode(value, { stream: true });
+
+        // 处理SSE格式的数据
+        const lines = chunk
+          .split("\n")
+          .filter(
+            (line) => line.trim() !== "" && line.trim() !== "data: [DONE]"
+          );
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const jsonData = JSON.parse(line.slice(6));
+              // 提取文本块
+              const content = jsonData.choices?.[0]?.delta?.content || "";
+              if (content) {
+                fullContent += content;
+                onStream(fullContent, false);
+              }
+            } catch (e) {
+              console.warn("无法解析OpenAI流式数据", e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("OpenAI流式API调用失败:", error);
+      onStream("", true);
+      throw error;
     }
   }
 }
@@ -235,6 +357,104 @@ class DeepSeekService extends BaseApiService {
         content: "",
         error: this.extractErrorMessage(error, "DeepSeek"),
       };
+    }
+  }
+
+  async sendMessageStream(
+    options: ApiCallOptions,
+    onStream: StreamResponseHandler
+  ): Promise<void> {
+    try {
+      const baseUrl = this.config.baseUrl || "https://api.deepseek.com/v1";
+
+      // 标准化消息格式
+      const messages = options.messages.map((msg) => ({
+        role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
+        content: msg.content,
+      }));
+
+      // 特殊处理当最后一条消息不是用户消息时，添加一个用户消息作为结尾
+      if (
+        messages.length > 0 &&
+        messages[messages.length - 1].role !== "user"
+      ) {
+        messages.push({ role: "user", content: "请回答上述问题。" });
+      }
+
+      console.log(
+        `DeepSeek流式请求(${this.config.model}): ${messages.length}条消息`
+      );
+
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: messages,
+          temperature: options.temperature ?? this.config.temperature ?? 0.7,
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage =
+          errorData.error?.message || `HTTP error! status: ${response.status}`;
+        onStream("", true);
+        throw new Error(`DeepSeek API错误: ${errorMessage}`);
+      }
+
+      if (!response.body) {
+        onStream("", true);
+        throw new Error("DeepSeek返回了空响应流");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let fullContent = "";
+
+      // 处理流式响应
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          onStream(fullContent, true);
+          break;
+        }
+
+        // 解码接收到的数据
+        const chunk = decoder.decode(value, { stream: true });
+
+        // 处理SSE格式的数据
+        const lines = chunk
+          .split("\n")
+          .filter(
+            (line) => line.trim() !== "" && line.trim() !== "data: [DONE]"
+          );
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const jsonData = JSON.parse(line.slice(6));
+              // 提取文本块
+              const content = jsonData.choices?.[0]?.delta?.content || "";
+              if (content) {
+                fullContent += content;
+                onStream(fullContent, false);
+              }
+            } catch (e) {
+              console.warn("无法解析DeepSeek流式数据", e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("DeepSeek流式API调用失败:", error);
+      onStream("", true);
+      throw error;
     }
   }
 }
@@ -295,6 +515,118 @@ class GeminiService extends BaseApiService {
     } catch (error) {
       console.error("Gemini API调用失败:", error);
       return { content: "", error: this.extractErrorMessage(error, "Gemini") };
+    }
+  }
+
+  async sendMessageStream(
+    options: ApiCallOptions,
+    onStream: StreamResponseHandler
+  ): Promise<void> {
+    try {
+      const baseUrl =
+        this.config.baseUrl ||
+        "https://generativelanguage.googleapis.com/v1beta";
+
+      // Gemini特殊处理 - 转换为Gemini支持的消息格式
+      const processedMessages = this.processGeminiMessages(options.messages);
+      const contents = processedMessages.map((msg) => ({
+        role: msg.role,
+        parts: [{ text: msg.content }],
+      }));
+
+      console.log(
+        `Gemini流式请求(${this.config.model}): ${contents.length}条消息`
+      );
+
+      const response = await fetch(
+        `${baseUrl}/models/${this.config.model}:streamGenerateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": this.config.apiKey,
+          },
+          body: JSON.stringify({
+            contents,
+            generationConfig: {
+              temperature:
+                options.temperature ?? this.config.temperature ?? 0.7,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage =
+          errorData.error?.message || `HTTP error! status: ${response.status}`;
+        onStream("", true);
+        throw new Error(`Gemini API错误: ${errorMessage}`);
+      }
+
+      if (!response.body) {
+        onStream("", true);
+        throw new Error("Gemini返回了空响应流");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let fullContent = "";
+
+      // 处理流式响应
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          onStream(fullContent, true);
+          break;
+        }
+
+        // 解码接收到的数据
+        const chunk = decoder.decode(value, { stream: true });
+
+        try {
+          // Gemini流式响应可能是一个JSON对象或多个JSON对象
+          // 将块分割成单独的JSON对象
+          const jsonLines = chunk
+            .split("\n")
+            .filter((line) => line.trim())
+            .map((line) => {
+              try {
+                return JSON.parse(line);
+              } catch (e) {
+                return null;
+              }
+            })
+            .filter(Boolean);
+
+          for (const jsonData of jsonLines) {
+            // 提取文本内容
+            const textContent =
+              jsonData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            if (textContent) {
+              fullContent += textContent;
+              onStream(fullContent, false);
+            }
+
+            // 检查安全过滤
+            if (jsonData.promptFeedback?.blockReason) {
+              throw new Error(
+                `Gemini内容被过滤: ${jsonData.promptFeedback.blockReason}`
+              );
+            }
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message.includes("Gemini内容被过滤")) {
+            throw e;
+          }
+          console.warn("无法解析Gemini流式数据", e);
+        }
+      }
+    } catch (error) {
+      console.error("Gemini流式API调用失败:", error);
+      onStream("", true);
+      throw error;
     }
   }
 
@@ -420,6 +752,103 @@ class ClaudeService extends BaseApiService {
     } catch (error) {
       console.error("Claude API调用失败:", error);
       return { content: "", error: this.extractErrorMessage(error, "Claude") };
+    }
+  }
+
+  async sendMessageStream(
+    options: ApiCallOptions,
+    onStream: StreamResponseHandler
+  ): Promise<void> {
+    try {
+      const baseUrl = this.config.baseUrl || "https://api.anthropic.com/v1";
+
+      // Claude只支持user和assistant角色
+      const messages = options.messages.map((msg) => ({
+        role: this.normalizeRole(msg.role, ["user", "assistant"]),
+        content: msg.content,
+      }));
+
+      console.log(
+        `Claude流式请求(${this.config.model}): ${messages.length}条消息`
+      );
+
+      const response = await fetch(`${baseUrl}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.config.apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "messages-2023-12-15", // 启用流式传输
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: messages,
+          temperature: options.temperature ?? this.config.temperature ?? 0.7,
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage =
+          errorData.error?.message || `HTTP error! status: ${response.status}`;
+        onStream("", true);
+        throw new Error(`Claude API错误: ${errorMessage}`);
+      }
+
+      if (!response.body) {
+        onStream("", true);
+        throw new Error("Claude返回了空响应流");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let fullContent = "";
+
+      // 处理流式响应
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          onStream(fullContent, true);
+          break;
+        }
+
+        // 解码接收到的数据
+        const chunk = decoder.decode(value, { stream: true });
+
+        // 处理Claude的SSE格式
+        const lines = chunk
+          .split("\n")
+          .filter(
+            (line) => line.trim() !== "" && line.trim() !== "data: [DONE]"
+          );
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const jsonData = JSON.parse(line.slice(6));
+              // 提取文本块 - Claude特定格式
+              if (jsonData.type === "content_block_delta") {
+                const deltaText = jsonData.delta?.text || "";
+                if (deltaText) {
+                  fullContent += deltaText;
+                  onStream(fullContent, false);
+                }
+              } else if (jsonData.type === "message_stop") {
+                // 消息结束
+                onStream(fullContent, true);
+              }
+            } catch (e) {
+              console.warn("无法解析Claude流式数据", e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Claude流式API调用失败:", error);
+      onStream("", true);
+      throw error;
     }
   }
 }

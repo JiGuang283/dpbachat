@@ -2,13 +2,14 @@
 import { createApiService } from "./api-service";
 import { useAppStore } from "@/store";
 import {
-  // ApiCallOptions, // 未使用，暂时注释
+  ApiCallOptions,
   Conversation,
   // Message, // 未使用，暂时注释
   MessageRole,
   ModelConfig,
   Preset,
 } from "@/types";
+import { StreamResponseHandler } from "./api-service";
 
 export class ChatService {
   /**
@@ -349,7 +350,7 @@ export class ChatService {
   }
 
   /**
-   * 发送常规消息
+   * 发送常规消息(非流式)
    */
   static async sendMessage(
     conversationId: string,
@@ -494,6 +495,165 @@ export class ChatService {
         MessageRole.Assistant,
         `错误: ${errorMessageText}`
       );
+    }
+  }
+
+  /**
+   * 发送流式消息 - 通过流式API实时返回响应
+   */
+  static async sendMessageStream(
+    conversationId: string,
+    content: string,
+    onStreamUpdate: (content: string, isComplete: boolean) => void
+  ): Promise<void> {
+    const store = useAppStore.getState();
+    const conversation = store.conversations.find(
+      (c) => c.id === conversationId
+    );
+
+    if (!conversation) {
+      throw new Error("找不到对话");
+    }
+
+    const model = store.models.find((m) => m.id === conversation.modelId);
+
+    if (!model) {
+      throw new Error("找不到模型配置");
+    }
+
+    // 检查模型配置是否有效
+    if (!model.apiKey || model.apiKey.trim() === "") {
+      onStreamUpdate(
+        `错误: 模型API密钥未配置或为空，请先在设置中配置有效的API密钥`,
+        true
+      );
+      store.addMessage(
+        conversationId,
+        MessageRole.Assistant,
+        `错误: 模型API密钥未配置或为空，请先在设置中配置有效的API密钥`
+      );
+      return;
+    }
+
+    // 添加用户消息
+    store.addMessage(conversationId, MessageRole.User, content);
+
+    // 创建一个空的助手消息，后续会更新内容
+    const assistantMessageId = store.addMessage(
+      conversationId,
+      MessageRole.Assistant,
+      ""
+    );
+
+    // 重新获取更新后的对话内容，确保包含刚添加的消息
+    const updatedConversation = useAppStore
+      .getState()
+      .conversations.find((c) => c.id === conversationId);
+
+    if (!updatedConversation) {
+      throw new Error("找不到更新后的对话");
+    }
+
+    try {
+      // 准备API调用的消息，但排除最后一条空的助手消息
+      const apiMessages = updatedConversation.messages
+        .filter((msg) => msg.id !== assistantMessageId)
+        .map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+      console.log(`发送流式聊天请求到${model.type}模型:`, {
+        modelId: model.id,
+        modelName: model.name,
+        modelType: model.type,
+        model: model.model,
+        messageCount: apiMessages.length,
+        baseUrl: model.baseUrl,
+        lastUserMessage:
+          content.substring(0, 30) + (content.length > 30 ? "..." : ""),
+      });
+
+      // 创建流式处理函数
+      const handleStreamResponse: StreamResponseHandler = (
+        text,
+        isComplete
+      ) => {
+        // 更新UI
+        onStreamUpdate(text, isComplete);
+
+        // 更新存储中的消息
+        store.updateMessageContent(conversationId, assistantMessageId, text);
+      };
+
+      // 发送给AI并处理流式响应
+      const apiService = createApiService(model);
+      await apiService.sendMessageStream(
+        { messages: apiMessages },
+        handleStreamResponse
+      );
+    } catch (error) {
+      console.error(`流式聊天发送异常:`, error);
+      let errorMessageText = "未知错误";
+      if (error instanceof Error) {
+        errorMessageText = error.message;
+      }
+
+      // 处理网络错误和超时错误
+      const potentialAxiosError = error as {
+        response?: { status?: number; data?: unknown };
+        code?: string;
+        message?: string;
+      };
+
+      if (potentialAxiosError.code === "ECONNABORTED") {
+        errorMessageText =
+          "请求超时，模型生成响应时间过长。请尝试减少输入内容或分批发送消息";
+      } else if (potentialAxiosError.code === "ERR_NETWORK") {
+        errorMessageText = "网络连接错误，请检查您的网络连接并重试";
+      } else if (
+        potentialAxiosError?.response?.status &&
+        potentialAxiosError?.response?.data
+      ) {
+        const statusCode = potentialAxiosError.response.status;
+        let detailedErrorText = `请求失败 (${statusCode})`;
+
+        // 针对常见HTTP错误给出友好提示
+        if (statusCode === 401) {
+          detailedErrorText = "API密钥无效或已过期，请更新您的密钥";
+        } else if (statusCode === 404) {
+          detailedErrorText =
+            "模型不存在或API端点错误，请检查模型名称和API配置";
+        } else if (statusCode === 400) {
+          detailedErrorText = "请求参数错误，可能是模型配置不正确";
+        } else if (statusCode === 429) {
+          detailedErrorText = "达到API请求限制，请稍后再试";
+        } else if (statusCode >= 500) {
+          detailedErrorText = "服务器错误，请稍后再试";
+        }
+
+        // 尝试提取响应中的错误信息
+        if (potentialAxiosError.response.data) {
+          try {
+            const errorData =
+              typeof potentialAxiosError.response.data === "string"
+                ? JSON.parse(potentialAxiosError.response.data)
+                : potentialAxiosError.response.data;
+            if (errorData.error && typeof errorData.error === "object") {
+              detailedErrorText += `: ${
+                errorData.error.message || JSON.stringify(errorData.error)
+              }`;
+            } else if (errorData.error) {
+              detailedErrorText += `: ${errorData.error}`;
+            }
+          } catch {} // 去除未使用变量 _ignoredJsonParseError
+        }
+        errorMessageText = detailedErrorText;
+      }
+
+      const errorText = `错误: ${errorMessageText}`;
+      onStreamUpdate(errorText, true);
+      store.updateMessageContent(conversationId, assistantMessageId, errorText);
     }
   }
 }

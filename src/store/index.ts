@@ -35,7 +35,12 @@ interface AppState {
   clearSelectedConversations: () => void; // 新增：清除所有选择
 
   // 消息操作
-  addMessage: (conversationId: string, role: string, content: string) => void;
+  addMessage: (conversationId: string, role: string, content: string) => string;
+  updateMessageContent: (
+    conversationId: string,
+    messageId: string,
+    content: string
+  ) => void;
 
   // 模型操作
   addModel: (model: Omit<ModelConfig, "id">) => string;
@@ -168,8 +173,9 @@ export const useAppStore = create<AppState>()(
 
       // 消息操作
       addMessage: (conversationId, role, content) => {
+        const messageId = uuidv4();
         const message: Message = {
-          id: uuidv4(),
+          id: messageId,
           role: role as MessageRole,
           content,
           timestamp: Date.now(),
@@ -181,6 +187,24 @@ export const useAppStore = create<AppState>()(
               ? {
                   ...conv,
                   messages: [...conv.messages, message],
+                  updatedAt: Date.now(),
+                }
+              : conv
+          ),
+        }));
+
+        return messageId;
+      },
+
+      updateMessageContent: (conversationId, messageId, content) => {
+        set((state) => ({
+          conversations: state.conversations.map((conv) =>
+            conv.id === conversationId
+              ? {
+                  ...conv,
+                  messages: conv.messages.map((msg) =>
+                    msg.id === messageId ? { ...msg, content } : msg
+                  ),
                   updatedAt: Date.now(),
                 }
               : conv
