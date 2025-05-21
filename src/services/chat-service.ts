@@ -574,16 +574,26 @@ export class ChatService {
           content.substring(0, 30) + (content.length > 30 ? "..." : ""),
       });
 
+      // 用于累积接收到的文本
+      let accumulatedText = "";
+
       // 创建流式处理函数
       const handleStreamResponse: StreamResponseHandler = (
         text,
         isComplete
       ) => {
+        // 累积文本
+        accumulatedText += text;
+
         // 更新UI
-        onStreamUpdate(text, isComplete);
+        onStreamUpdate(accumulatedText, isComplete);
 
         // 更新存储中的消息
-        store.updateMessageContent(conversationId, assistantMessageId, text);
+        store.updateMessageContent(
+          conversationId,
+          assistantMessageId,
+          accumulatedText
+        );
       };
 
       // 发送给AI并处理流式响应

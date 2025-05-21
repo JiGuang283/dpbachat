@@ -119,4 +119,36 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* 流式输出打字机动画效果 */
+  @keyframes blink-cursor {
+    0%,
+    100% {
+      border-right-color: transparent;
+    }
+    50% {
+      border-right-color: currentColor;
+    }
+  }
+
+  .typing-animation {
+    border-right: 2px solid;
+    animation: blink-cursor 0.8s step-end infinite;
+  }
+}
+
+/* 流式输出打字机动画效果 */
+@keyframes blink-cursor {
+  0%,
+  100% {
+    border-right-color: transparent;
+  }
+  50% {
+    border-right-color: currentColor;
+  }
+}
+
+.typing-animation {
+  border-right: 2px solid;
+  animation: blink-cursor 0.8s step-end infinite;
 }

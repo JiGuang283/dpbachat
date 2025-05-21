@@ -37,6 +37,8 @@ export default function ChatView() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [useStreamingMode, setUseStreamingMode] = useState(true);
   const [streamingContent, setStreamingContent] = useState("");
+  // 添加一个状态来跟踪流式传输是否在进行中
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +88,7 @@ export default function ChatView() {
 
       if (useStreamingMode) {
         // 使用流式传输
+        setIsStreaming(true); // 标记流式传输开始
         await ChatService.sendMessageStream(
           conversation.id,
           messageContent,
@@ -93,16 +96,19 @@ export default function ChatView() {
             setStreamingContent(content);
             if (isComplete) {
               setSending(false);
+              setIsStreaming(false); // 标记流式传输结束
             }
           }
         );
       } else {
         // 使用常规传输
         await ChatService.sendMessage(conversation.id, messageContent);
+        setSending(false);
       }
     } catch (error) {
       console.error("发送消息失败:", error);
       setSending(false);
+      setIsStreaming(false); // 确保在出错时也重置流式状态
     }
   };
 
@@ -220,7 +226,17 @@ export default function ChatView() {
                         </span>
                       )}
                   </div>
-                  <div className="whitespace-pre-wrap">
+                  <div
+                    className={`whitespace-pre-wrap ${
+                      sending &&
+                      index === conversation.messages.length - 1 &&
+                      msg.role === MessageRole.Assistant &&
+                      useStreamingMode &&
+                      isStreaming
+                        ? "typing-animation"
+                        : ""
+                    }`}
+                  >
                     {sending &&
                     index === conversation.messages.length - 1 &&
                     msg.role === MessageRole.Assistant &&

@@ -1,52 +1,22 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { ApiCallOptions, ApiResponse, ModelConfig, ModelType } from "@/types";
 
 /**
- * 流式响应处理函数
+ * 流式响应处理函数（传递增量内容）
  */
 export type StreamResponseHandler = (
-  chunk: string,
+  chunk: string,  // 当前增量内容（非累积）
   isComplete: boolean
 ) => void;
-
-/**
- * API错误响应类型定义
- */
-interface ApiErrorResponse {
-  status?: number;
-  data?: {
-    error?: { message?: string } | string;
-    message?: string;
-  };
-}
 
 /**
  * 通用API请求配置 - 增加超时和响应大小处理
  */
 const API_REQUEST_CONFIG = {
   timeout: 180000, // 2分钟超时
-  maxContentLength: Infinity, // 不限制响应大小
-  maxBodyLength: Infinity, // 不限制请求体大小
+  maxContentLength: Infinity,
+  maxBodyLength: Infinity,
 };
-
-/**
- * API错误响应类型定义
- */
-interface ApiErrorResponse {
-  status?: number;
-  data?: {
-    error?: { message?: string } | string;
-    message?: string;
-  };
-}
-
-/**
- * API错误类型定义
- */
-interface ApiError extends Error {
-  // Ensure it extends Error for proper error handling
-  response?: ApiErrorResponse;
-}
 
 /**
  * API服务工厂 - 根据模型类型创建对应的API服务实例
@@ -67,7 +37,7 @@ export const createApiService = (modelConfig: ModelConfig) => {
 };
 
 /**
- * 基础API服务抽象类 - 所有具体API服务的基类
+ * 基础API服务抽象类（修正参数后）
  */
 abstract class BaseApiService {
   protected config: ModelConfig;
@@ -77,7 +47,7 @@ abstract class BaseApiService {
   }
 
   /**
-   * 标准化消息角色 - 处理大小写并根据支持情况转换角色
+   * 标准化消息角色（支持更多角色）
    */
   protected normalizeRole(role: string, supportedRoles: string[]): string {
     const normalizedRole = role.toLowerCase();
@@ -85,78 +55,93 @@ abstract class BaseApiService {
   }
 
   /**
-   * 提取API错误信息 - 统一错误处理逻辑
+   * 提取API错误信息（使用AxiosError类型断言）
    */
   protected extractErrorMessage(error: unknown, defaultPrefix: string): string {
-    // 类型守卫函数
-    const isApiError = (err: unknown): err is ApiError => {
-      return (
-        err !== null && typeof err === "object" && "message" in err
-        // Optionally, check for 'response' if it's a critical part of ApiError
-        // && (typeof (err as any).response === 'object' || (err as any).response === undefined)
-      );
-    };
+    if (error instanceof AxiosError) {
+      const responseData = error.response?.data;
+      if (responseData?.error) {
+        return typeof responseData.error === "string" 
+          ? responseData.error 
+          : responseData.error.message || `${defaultPrefix} API错误`;
+      }
+      if (responseData?.message) return responseData.message;
 
-    if (isApiError(error)) {
-      // 首先尝试从响应数据中获取错误信息
-      if (error.response?.data?.error) {
-        if (typeof error.response.data.error === "string") {
-          return error.response.data.error;
-        } else if (error.response.data.error.message) {
-          return error.response.data.error.message;
-        }
-      }
-      if (error.response?.data?.message) {
-        return error.response.data.message;
-      }
-      // 如果响应中没有具体的错误信息，但 error 对象本身有 message 属性
-      if (error.message) {
-        // 基于HTTP状态码给出友好提示 (如果存在response)
-        if (error.response?.status) {
-          const status = error.response.status;
-          if (status === 401) {
-            return `${defaultPrefix} API密钥无效或已过期 (${error.message})`;
-          } else if (status === 404) {
-            return `${defaultPrefix} 模型不存在或API端点错误 (${error.message})`;
-          } else if (status === 429) {
-            return `${defaultPrefix} 请求频率限制，请稍后再试 (${error.message})`;
-          }
-        }
-        return error.message; // Fallback to the direct error message
+      const status = error.response?.status;
+      switch (status) {
+        case 401: return `${defaultPrefix} API密钥无效或已过期`;
+        case 404: return `${defaultPrefix} 模型不存在或API端点错误`;
+        case 429: return `${defaultPrefix} 请求频率限制，请稍后再试`;
+        default: return `${defaultPrefix} API请求失败 (${status || "未知状态码"})`;
       }
     }
 
-    // 如果不是 ApiError 或者没有提取到特定消息，则使用通用 HTTP 状态码提示
-    // This part requires error to be of a type that allows property access, or use type guards.
-    // We assume error might have a response property.
-    const potentialAxiosError = error as { response?: { status?: number } };
-    if (potentialAxiosError?.response?.status) {
-      const status = potentialAxiosError.response.status;
-      if (status === 401) {
-        return `${defaultPrefix} API密钥无效或已过期`;
-      } else if (status === 404) {
-        return `${defaultPrefix} 模型不存在或API端点错误`;
-      } else if (status === 429) {
-        return `${defaultPrefix} 请求频率限制，请稍后再试`;
-      }
-    }
-
-    // 如果 error 不是 Error 的实例，则返回通用未知错误
-    if (error instanceof Error) {
-      return `${defaultPrefix} ${error.message || "未知错误"}`;
-    }
-
-    return `${defaultPrefix} 未知错误`;
+    return error instanceof Error 
+      ? `${defaultPrefix} ${error.message || "未知错误"}` 
+      : `${defaultPrefix} 未知错误`;
   }
 
   /**
-   * 发送消息到语言模型 - 子类必须实现此方法
+   * 通用流式处理方法（修正参数：明确包含onStream）
    */
-  abstract sendMessage(options: ApiCallOptions): Promise<ApiResponse>;
+  protected async handleStreamRequest(
+    url: string,
+    requestBody: any,
+    headers: Record<string, string>,
+    parseChunk: (chunk: any) => string,  // 子类实现的增量解析函数
+    onStream: StreamResponseHandler      // 新增：流式回调参数
+  ): Promise<void> {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
 
-  /**
-   * 使用流式传输发送消息到语言模型 - 子类必须实现此方法
-   */
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error?.message || `HTTP错误: ${response.status}`
+        );
+      }
+
+      if (!response.body) {
+        throw new Error("API返回了空响应流");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          onStream("", true); // 流结束时触发完成回调
+          break;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n").filter(line => line.trim() !== "");
+        
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const jsonData = JSON.parse(line.slice(6));
+              const delta = parseChunk(jsonData);  // 子类解析增量
+              if (delta) onStream(delta, false);   // 传递增量内容
+            } catch (parseError) {
+              console.warn("流式数据解析失败:", parseError);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("流式请求失败:", error);
+      onStream("", true); // 异常时强制结束
+      throw error;
+    }
+  }
+
+  abstract sendMessage(options: ApiCallOptions): Promise<ApiResponse>;
   abstract sendMessageStream(
     options: ApiCallOptions,
     onStream: StreamResponseHandler
@@ -164,198 +149,40 @@ abstract class BaseApiService {
 }
 
 /**
- * OpenAI API服务实现
+ * OpenAI API服务实现（修正流式调用）
  */
 class OpenAIService extends BaseApiService {
   async sendMessage(options: ApiCallOptions): Promise<ApiResponse> {
     try {
       const baseUrl = this.config.baseUrl || "https://api.openai.com/v1";
+      if (!this.config.model) return { content: "", error: "未指定OpenAI模型名称" };
 
-      if (!this.config.model) {
-        return { content: "", error: "未指定OpenAI模型名称" };
-      }
-
-      // 标准化消息格式
       const messages = options.messages.map((msg) => ({
         role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
         content: msg.content,
       }));
-
-      console.log(`OpenAI请求(${this.config.model}): ${messages.length}条消息`);
 
       const response = await axios.post(
         `${baseUrl}/chat/completions`,
         {
           model: this.config.model,
-          messages: messages,
+          messages,
           temperature: options.temperature ?? this.config.temperature ?? 0.7,
-          // max_tokens 参数已移除
         },
         {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${this.config.apiKey}`,
-          },
-          ...API_REQUEST_CONFIG, // 使用通用请求配置增加超时和大小限制
+          headers: { Authorization: `Bearer ${this.config.apiKey}` },
+          ...API_REQUEST_CONFIG,
         }
       );
 
-      if (!response.data.choices || response.data.choices.length === 0) {
-        return { content: "", error: "OpenAI返回了空响应" };
-      }
-
-      return { content: response.data.choices[0].message.content || "" };
+      return { 
+        content: response.data.choices?.[0]?.message?.content || "",
+        error: response.data.error?.message
+      };
     } catch (error) {
-      console.error("OpenAI API调用失败:", error);
-      return { content: "", error: this.extractErrorMessage(error, "OpenAI") };
-    }
-  }
-
-  async sendMessageStream(
-    options: ApiCallOptions,
-    onStream: StreamResponseHandler
-  ): Promise<void> {
-    try {
-      const baseUrl = this.config.baseUrl || "https://api.openai.com/v1";
-
-      if (!this.config.model) {
-        onStream("", true);
-        throw new Error("未指定OpenAI模型名称");
-      }
-
-      // 标准化消息格式
-      const messages = options.messages.map((msg) => ({
-        role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
-        content: msg.content,
-      }));
-
-      console.log(
-        `OpenAI流式请求(${this.config.model}): ${messages.length}条消息`
-      );
-
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: messages,
-          temperature: options.temperature ?? this.config.temperature ?? 0.7,
-          stream: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage =
-          errorData.error?.message || `HTTP error! status: ${response.status}`;
-        onStream("", true);
-        throw new Error(`OpenAI API错误: ${errorMessage}`);
-      }
-
-      if (!response.body) {
-        onStream("", true);
-        throw new Error("OpenAI返回了空响应流");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let fullContent = "";
-
-      // 处理流式响应
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          onStream(fullContent, true);
-          break;
-        }
-
-        // 解码接收到的数据
-        const chunk = decoder.decode(value, { stream: true });
-
-        // 处理SSE格式的数据
-        const lines = chunk
-          .split("\n")
-          .filter(
-            (line) => line.trim() !== "" && line.trim() !== "data: [DONE]"
-          );
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const jsonData = JSON.parse(line.slice(6));
-              // 提取文本块
-              const content = jsonData.choices?.[0]?.delta?.content || "";
-              if (content) {
-                fullContent += content;
-                onStream(fullContent, false);
-              }
-            } catch (error) {
-              console.warn("无法解析OpenAI流式数据", error);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("OpenAI流式API调用失败:", error);
-      onStream("", true);
-      throw error;
-    }
-  }
-}
-
-/**
- * DeepSeek API服务实现
- */
-class DeepSeekService extends BaseApiService {
-  async sendMessage(options: ApiCallOptions): Promise<ApiResponse> {
-    try {
-      const baseUrl = this.config.baseUrl || "https://api.deepseek.com/v1";
-
-      // 标准化消息格式
-      const messages = options.messages.map((msg) => ({
-        role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
-        content: msg.content,
-      }));
-
-      // 特殊处理当最后一条消息不是用户消息时，添加一个用户消息作为结尾
-      if (
-        messages.length > 0 &&
-        messages[messages.length - 1].role !== "user"
-      ) {
-        messages.push({ role: "user", content: "请回答上述问题。" });
-      }
-
-      console.log(
-        `DeepSeek请求(${this.config.model}): ${messages.length}条消息`
-      );
-
-      const response = await axios.post(
-        `${baseUrl}/chat/completions`,
-        {
-          model: this.config.model,
-          messages: messages,
-          temperature: options.temperature ?? this.config.temperature ?? 0.7,
-          // max_tokens 参数已移除
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${this.config.apiKey}`,
-          },
-          ...API_REQUEST_CONFIG, // 使用通用请求配置增加超时和大小限制
-        }
-      );
-
-      return { content: response.data.choices[0].message.content };
-    } catch (error) {
-      console.error("DeepSeek API调用失败:", error);
-      return {
-        content: "",
-        error: this.extractErrorMessage(error, "DeepSeek"),
+      return { 
+        content: "", 
+        error: this.extractErrorMessage(error, "OpenAI") 
       };
     }
   }
@@ -364,157 +191,69 @@ class DeepSeekService extends BaseApiService {
     options: ApiCallOptions,
     onStream: StreamResponseHandler
   ): Promise<void> {
+    const baseUrl = this.config.baseUrl || "https://api.openai.com/v1";
+    if (!this.config.model) {
+      onStream("", true);
+      return;
+    }
+
+    const messages = options.messages.map((msg) => ({
+      role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
+      content: msg.content,
+    }));
+
+    // 调用handleStreamRequest时传递完整5个参数（新增onStream）
+    await this.handleStreamRequest(
+      `${baseUrl}/chat/completions`,
+      {
+        model: this.config.model,
+        messages,
+        temperature: options.temperature ?? this.config.temperature ?? 0.7,
+        stream: true,
+      },
+      { Authorization: `Bearer ${this.config.apiKey}` },
+      (jsonData) => jsonData.choices?.[0]?.delta?.content || "",
+      onStream  // 补充第5个参数：流式回调
+    );
+  }
+}
+
+/**
+ * DeepSeek API服务实现（修正流式调用）
+ */
+class DeepSeekService extends BaseApiService {
+  async sendMessage(options: ApiCallOptions): Promise<ApiResponse> {
     try {
       const baseUrl = this.config.baseUrl || "https://api.deepseek.com/v1";
+      if (!this.config.model) return { content: "", error: "未指定DeepSeek模型名称" };
 
-      // 标准化消息格式
       const messages = options.messages.map((msg) => ({
         role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
         content: msg.content,
       }));
 
-      // 特殊处理当最后一条消息不是用户消息时，添加一个用户消息作为结尾
-      if (
-        messages.length > 0 &&
-        messages[messages.length - 1].role !== "user"
-      ) {
-        messages.push({ role: "user", content: "请回答上述问题。" });
-      }
-
-      console.log(
-        `DeepSeek流式请求(${this.config.model}): ${messages.length}条消息`
-      );
-
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: messages,
-          temperature: options.temperature ?? this.config.temperature ?? 0.7,
-          stream: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage =
-          errorData.error?.message || `HTTP error! status: ${response.status}`;
-        onStream("", true);
-        throw new Error(`DeepSeek API错误: ${errorMessage}`);
-      }
-
-      if (!response.body) {
-        onStream("", true);
-        throw new Error("DeepSeek返回了空响应流");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let fullContent = "";
-
-      // 处理流式响应
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          onStream(fullContent, true);
-          break;
-        }
-
-        // 解码接收到的数据
-        const chunk = decoder.decode(value, { stream: true });
-
-        // 处理SSE格式的数据
-        const lines = chunk
-          .split("\n")
-          .filter(
-            (line) => line.trim() !== "" && line.trim() !== "data: [DONE]"
-          );
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const jsonData = JSON.parse(line.slice(6));
-              // 提取文本块
-              const content = jsonData.choices?.[0]?.delta?.content || "";
-              if (content) {
-                fullContent += content;
-                onStream(fullContent, false);
-              }
-            } catch (error) {
-              console.warn("无法解析DeepSeek流式数据", error);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("DeepSeek流式API调用失败:", error);
-      onStream("", true);
-      throw error;
-    }
-  }
-}
-
-/**
- * Gemini API服务实现
- */
-class GeminiService extends BaseApiService {
-  async sendMessage(options: ApiCallOptions): Promise<ApiResponse> {
-    try {
-      const baseUrl =
-        this.config.baseUrl ||
-        "https://generativelanguage.googleapis.com/v1beta";
-
-      // 移除了模型有效性检查，允许用户自由指定任何模型名称
-
-      // Gemini特殊处理 - 转换为Gemini支持的消息格式
-      const processedMessages = this.processGeminiMessages(options.messages);
-      const contents = processedMessages.map((msg) => ({
-        role: msg.role,
-        parts: [{ text: msg.content }],
-      }));
-
-      console.log(`Gemini请求(${this.config.model}): ${contents.length}条消息`);
-
       const response = await axios.post(
-        `${baseUrl}/models/${this.config.model}:generateContent`,
+        `${baseUrl}/chat/completions`,
         {
-          contents,
-          generationConfig: {
-            temperature: options.temperature ?? this.config.temperature ?? 0.7,
-            // maxOutputTokens 参数已移除
-          },
+          model: this.config.model,
+          messages,
+          temperature: options.temperature ?? this.config.temperature ?? 0.7,
         },
         {
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": this.config.apiKey,
-          },
-          ...API_REQUEST_CONFIG, // 使用通用请求配置增加超时和大小限制
+          headers: { Authorization: `Bearer ${this.config.apiKey}` },
+          ...API_REQUEST_CONFIG,
         }
       );
 
-      // 检查安全过滤
-      if (response.data.promptFeedback?.blockReason) {
-        return {
-          content: "",
-          error: `Gemini内容被过滤: ${response.data.promptFeedback.blockReason}`,
-        };
-      }
-
-      // 验证响应
-      if (!response.data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        return { content: "", error: "Gemini返回了无效响应" };
-      }
-
-      return { content: response.data.candidates[0].content.parts[0].text };
+      return { 
+        content: response.data.choices?.[0]?.message?.content || "",
+        error: response.data.error?.message
+      };
     } catch (error) {
-      console.error("Gemini API调用失败:", error);
-      return { content: "", error: this.extractErrorMessage(error, "Gemini") };
+      return { 
+        content: "", 
+        error: this.extractErrorMessage(error, "DeepSeek") 
+      };
     }
   }
 
@@ -522,296 +261,141 @@ class GeminiService extends BaseApiService {
     options: ApiCallOptions,
     onStream: StreamResponseHandler
   ): Promise<void> {
-    try {
-      const baseUrl =
-        this.config.baseUrl ||
-        "https://generativelanguage.googleapis.com/v1beta";
-
-      // Gemini特殊处理 - 转换为Gemini支持的消息格式
-      const processedMessages = this.processGeminiMessages(options.messages);
-      const contents = processedMessages.map((msg) => ({
-        role: msg.role,
-        parts: [{ text: msg.content }],
-      }));
-
-      console.log(
-        `Gemini流式请求(${this.config.model}): ${contents.length}条消息`
-      );
-
-      const response = await fetch(
-        `${baseUrl}/models/${this.config.model}:streamGenerateContent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": this.config.apiKey,
-          },
-          body: JSON.stringify({
-            contents,
-            generationConfig: {
-              temperature:
-                options.temperature ?? this.config.temperature ?? 0.7,
-            },
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage =
-          errorData.error?.message || `HTTP error! status: ${response.status}`;
-        onStream("", true);
-        throw new Error(`Gemini API错误: ${errorMessage}`);
-      }
-
-      if (!response.body) {
-        onStream("", true);
-        throw new Error("Gemini返回了空响应流");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let fullContent = "";
-      let buffer = ""; // Buffer for incomplete JSON lines
-
-      // 定义Gemini流式响应对象的接口
-      interface GeminiStreamResponseObject {
-        promptFeedback?: {
-          blockReason?: string;
-        };
-        candidates?: Array<{
-          content?: {
-            parts?: Array<{
-              text?: string;
-            }>;
-          };
-        }>;
-        // Gemini API 可能还包含其他字段，根据需要添加
-      }
-
-      // 处理流式响应
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          // Process any remaining data in the buffer when the stream is done
-          if (buffer.trim()) {
-            try {
-              const parsedData = JSON.parse(buffer);
-              let responsesToProcess: GeminiStreamResponseObject[] = [];
-
-              if (Array.isArray(parsedData)) {
-                responsesToProcess = parsedData as GeminiStreamResponseObject[];
-              } else if (typeof parsedData === 'object' && parsedData !== null) {
-                responsesToProcess = [parsedData as GeminiStreamResponseObject];
-              }
-
-              for (const responseObject of responsesToProcess) {
-                // Check for prompt feedback / block reason at the response object level
-                if (responseObject.promptFeedback?.blockReason) {
-                  console.error(
-                    `Gemini content filtered in final processing: ${responseObject.promptFeedback.blockReason}`
-                  );
-                  // Optionally, throw an error or set an error message in fullContent.
-                  // If an error is thrown here, it will be caught by the outer catch block.
-                  // For now, content accumulation continues, and the error is logged.
-                }
-
-                if (responseObject.candidates && Array.isArray(responseObject.candidates)) {
-                  for (const candidate of responseObject.candidates) {
-                    if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
-                      for (const part of candidate.content.parts) {
-                        if (typeof part.text === 'string') {
-                          fullContent += part.text;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            } catch (error) {
-              console.warn(
-                "无法解析Gemini最终流式数据 (final buffer)",
-                buffer,
-                error
-              );
-              // If parsing the final buffer fails, onStream will send whatever fullContent has accumulated so far.
-              // The error is logged, and the stream will be marked as complete.
-            }
-          }
-          onStream(fullContent, true); // Send final accumulated content and mark as complete
-          break;
-        }
-
-        // Append new data to buffer
-        buffer += decoder.decode(value, { stream: true });
-
-        // Process complete JSON objects from the buffer
-        let boundaryIndex;
-        // eslint-disable-next-line no-cond-assign
-        while ((boundaryIndex = buffer.indexOf("\\n")) !== -1) {
-          const line = buffer.substring(0, boundaryIndex).trim();
-          buffer = buffer.substring(boundaryIndex + 1); // Remaining part for next iteration or next chunk
-
-          if (line === "") continue;
-
-          try {
-            const jsonData = JSON.parse(line);
-            // 提取文本内容
-            const textContent =
-              jsonData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            if (textContent) {
-              fullContent += textContent;
-              onStream(fullContent, false); // Stream accumulated content
-            }
-
-            // 检查安全过滤
-            if (jsonData.promptFeedback?.blockReason) {
-              onStream(fullContent, true); // Mark as complete due to error
-              throw new Error(
-                `Gemini内容被过滤: ${jsonData.promptFeedback.blockReason}`
-              );
-            }
-          } catch (error) {
-            // This catch is for JSON.parse(line)
-            console.warn("无法解析Gemini流式数据 (line)", line, error);
-            // If a line fails to parse, it might be an incomplete part that was split
-            // without a newline, or genuinely malformed. The buffer should handle most splits.
-            // For now, we log and continue, similar to the original code's behavior of discarding unparsable lines.
-          }
-        }
-        // After the loop, 'buffer' contains the incomplete part of the last line (if any)
-        // which will be processed with the next chunk or in the 'done' block.
-      }
-    } catch (error) {
-      console.error("Gemini流式API调用失败:", error);
+    const baseUrl = this.config.baseUrl || "https://api.deepseek.com/v1";
+    if (!this.config.model) {
       onStream("", true);
-      throw error;
-    }
-  }
-
-  // 处理Gemini特有的消息格式
-  private processGeminiMessages(
-    messages: { role: string; content: string }[]
-  ): { role: string; content: string }[] {
-    const result: { role: string; content: string }[] = [];
-    const isSimpleRequest = messages.length <= 2;
-
-    // 简单请求模式(穿甲弹或预设)
-    if (isSimpleRequest) {
-      // 只取最后一条用户消息
-      const userMsg = messages
-        .filter((m) => m.role.toLowerCase() === "user")
-        .pop();
-      if (userMsg) {
-        result.push({ role: "user", content: userMsg.content });
-        return result;
-      }
-
-      // 没有用户消息时，尝试使用系统消息
-      const sysMsg = messages
-        .filter((m) => m.role.toLowerCase() === "system")
-        .pop();
-      if (sysMsg) {
-        result.push({ role: "user", content: sysMsg.content });
-        return result;
-      }
-
-      // 兜底方案
-      if (messages.length > 0) {
-        result.push({
-          role: "user",
-          content: messages[messages.length - 1].content,
-        });
-      }
-
-      return result;
+      return;
     }
 
-    // 完整对话模式
-    let currentRole = ""; // 跟踪当前角色
+    const messages = options.messages.map((msg) => ({
+      role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
+      content: msg.content,
+    }));
 
-    // 处理系统消息
-    const systemContents = messages
-      .filter((msg) => msg.role.toLowerCase() === "system")
-      .map((msg) => msg.content)
-      .join("\n\n");
-
-    if (systemContents) {
-      result.push({ role: "user", content: `[系统指令] ${systemContents}` });
-      currentRole = "user";
-    }
-
-    // 处理用户和助手消息
-    messages
-      .filter((msg) => msg.role.toLowerCase() !== "system")
-      .forEach((msg) => {
-        const msgRole =
-          msg.role.toLowerCase() === "assistant" ? "model" : "user";
-
-        // 保证消息交替出现
-        if (result.length > 0 && currentRole === msgRole) {
-          result.push({
-            role: msgRole === "user" ? "model" : "user",
-            content: "继续",
-          });
-        }
-
-        result.push({ role: msgRole, content: msg.content });
-        currentRole = msgRole;
-      });
-
-    // 确保以用户消息结尾
-    if (result.length > 0 && result[result.length - 1].role !== "user") {
-      result.push({ role: "user", content: "请回答上述问题。" });
-    }
-
-    return result;
+    await this.handleStreamRequest(
+      `${baseUrl}/chat/completions`,
+      {
+        model: this.config.model,
+        messages,
+        temperature: options.temperature ?? this.config.temperature ?? 0.7,
+        stream: true,
+      },
+      { Authorization: `Bearer ${this.config.apiKey}` },
+      (jsonData) => jsonData.choices?.[0]?.delta?.content || "",
+      onStream  // 补充第5个参数
+    );
   }
 }
 
 /**
- * Claude API服务实现
+ * Gemini API服务实现（修正流式调用）
+ */
+class GeminiService extends BaseApiService {
+  async sendMessage(options: ApiCallOptions): Promise<ApiResponse> {
+    try {
+      const baseUrl = this.config.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
+      if (!this.config.model) return { content: "", error: "未指定Gemini模型名称" };
+
+      const contents = options.messages.map((msg) => ({
+        role: this.normalizeRole(msg.role, ["user", "system", "model"]),
+        parts: [{ text: msg.content }],
+      }));
+
+      const response = await axios.post(
+        `${baseUrl}/models/${this.config.model}:generateContent`,
+        { contents, generationConfig: { temperature: options.temperature ?? this.config.temperature ?? 0.7 } },
+        {
+          headers: { "x-goog-api-key": this.config.apiKey },
+          ...API_REQUEST_CONFIG,
+        }
+      );
+
+      if (response.data.promptFeedback?.blockReason) {
+        return { 
+          content: "", 
+          error: `内容被过滤: ${response.data.promptFeedback.blockReason}` 
+        };
+      }
+
+      return { 
+        content: response.data.candidates?.[0]?.content?.parts?.[0]?.text || "",
+        error: response.data.error?.message
+      };
+    } catch (error) {
+      return { 
+        content: "", 
+        error: this.extractErrorMessage(error, "Gemini") 
+      };
+    }
+  }
+
+  async sendMessageStream(
+    options: ApiCallOptions,
+    onStream: StreamResponseHandler
+  ): Promise<void> {
+    const baseUrl = this.config.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
+    if (!this.config.model) {
+      onStream("", true);
+      return;
+    }
+
+    const contents = options.messages.map((msg) => ({
+      role: this.normalizeRole(msg.role, ["user", "system", "model"]),
+      parts: [{ text: msg.content }],
+    }));
+
+    await this.handleStreamRequest(
+      `${baseUrl}/models/${this.config.model}:streamGenerateContent`,
+      {
+        contents,
+        generationConfig: { temperature: options.temperature ?? this.config.temperature ?? 0.7 },
+      },
+      { "x-goog-api-key": this.config.apiKey },
+      (jsonData) => jsonData.candidates?.[0]?.content?.parts?.[0]?.text || "",
+      onStream  // 补充第5个参数
+    );
+  }
+}
+
+/**
+ * Claude API服务实现（修正流式调用）
  */
 class ClaudeService extends BaseApiService {
   async sendMessage(options: ApiCallOptions): Promise<ApiResponse> {
     try {
       const baseUrl = this.config.baseUrl || "https://api.anthropic.com/v1";
+      if (!this.config.model) return { content: "", error: "未指定Claude模型名称" };
 
-      // Claude只支持user和assistant角色
       const messages = options.messages.map((msg) => ({
-        role: this.normalizeRole(msg.role, ["user", "assistant"]),
+        role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
         content: msg.content,
       }));
-
-      console.log(`Claude请求(${this.config.model}): ${messages.length}条消息`);
 
       const response = await axios.post(
         `${baseUrl}/messages`,
         {
           model: this.config.model,
-          messages: messages,
+          messages,
           temperature: options.temperature ?? this.config.temperature ?? 0.7,
-          // max_tokens 参数已移除
         },
         {
           headers: {
-            "Content-Type": "application/json",
             "x-api-key": this.config.apiKey,
             "anthropic-version": "2023-06-01",
           },
-          ...API_REQUEST_CONFIG, // 使用通用请求配置增加超时和大小限制
+          ...API_REQUEST_CONFIG,
         }
       );
 
-      if (!response.data.content?.[0]?.text) {
-        return { content: "", error: "Claude返回了无效响应" };
-      }
-
-      return { content: response.data.content[0].text };
+      return { 
+        content: response.data.content?.[0]?.text || "",
+        error: response.data.error?.message
+      };
     } catch (error) {
-      console.error("Claude API调用失败:", error);
-      return { content: "", error: this.extractErrorMessage(error, "Claude") };
+      return { 
+        content: "", 
+        error: this.extractErrorMessage(error, "Claude") 
+      };
     }
   }
 
@@ -819,96 +403,32 @@ class ClaudeService extends BaseApiService {
     options: ApiCallOptions,
     onStream: StreamResponseHandler
   ): Promise<void> {
-    try {
-      const baseUrl = this.config.baseUrl || "https://api.anthropic.com/v1";
-
-      // Claude只支持user和assistant角色
-      const messages = options.messages.map((msg) => ({
-        role: this.normalizeRole(msg.role, ["user", "assistant"]),
-        content: msg.content,
-      }));
-
-      console.log(
-        `Claude流式请求(${this.config.model}): ${messages.length}条消息`
-      );
-
-      const response = await fetch(`${baseUrl}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": this.config.apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "messages-2023-12-15", // 启用流式传输
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: messages,
-          temperature: options.temperature ?? this.config.temperature ?? 0.7,
-          stream: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage =
-          errorData.error?.message || `HTTP error! status: ${response.status}`;
-        onStream("", true);
-        throw new Error(`Claude API错误: ${errorMessage}`);
-      }
-
-      if (!response.body) {
-        onStream("", true);
-        throw new Error("Claude返回了空响应流");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let fullContent = "";
-
-      // 处理流式响应
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          onStream(fullContent, true);
-          break;
-        }
-
-        // 解码接收到的数据
-        const chunk = decoder.decode(value, { stream: true });
-
-        // 处理Claude的SSE格式
-        const lines = chunk
-          .split("\n")
-          .filter(
-            (line) => line.trim() !== "" && line.trim() !== "data: [DONE]"
-          );
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const jsonData = JSON.parse(line.slice(6));
-              // 提取文本块 - Claude特定格式
-              if (jsonData.type === "content_block_delta") {
-                const deltaText = jsonData.delta?.text || "";
-                if (deltaText) {
-                  fullContent += deltaText;
-                  onStream(fullContent, false);
-                }
-              } else if (jsonData.type === "message_stop") {
-                // 消息结束
-                onStream(fullContent, true);
-              }
-            } catch (error) {
-              console.warn("无法解析Claude流式数据", error);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Claude流式API调用失败:", error);
+    const baseUrl = this.config.baseUrl || "https://api.anthropic.com/v1";
+    if (!this.config.model) {
       onStream("", true);
-      throw error;
+      return;
     }
+
+    const messages = options.messages.map((msg) => ({
+      role: this.normalizeRole(msg.role, ["user", "system", "assistant"]),
+      content: msg.content,
+    }));
+
+    await this.handleStreamRequest(
+      `${baseUrl}/messages`,
+      {
+        model: this.config.model,
+        messages,
+        temperature: options.temperature ?? this.config.temperature ?? 0.7,
+        stream: true,
+      },
+      {
+        "x-api-key": this.config.apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "messages-2023-12-15",
+      },
+      (jsonData) => jsonData.type === "content_block_delta" ? jsonData.delta?.text || "" : "",
+      onStream  // 补充第5个参数
+    );
   }
 }
