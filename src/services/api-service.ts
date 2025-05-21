@@ -572,57 +572,81 @@ class GeminiService extends BaseApiService {
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let fullContent = "";
+      let buffer = ""; // Buffer for incomplete JSON lines
 
       // 处理流式响应
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
-          onStream(fullContent, true);
+          // Process any remaining data in the buffer when the stream is done
+          if (buffer.trim()) {
+            try {
+              const jsonData = JSON.parse(buffer);
+              const textContent =
+                jsonData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              if (textContent) {
+                fullContent += textContent;
+                // The final onStream(fullContent, true) will send this.
+              }
+              if (jsonData.promptFeedback?.blockReason) {
+                console.error(
+                  `Gemini内容被过滤 (final buffer): ${jsonData.promptFeedback.blockReason}`
+                );
+                // Consider how to propagate this error. For now, it's logged.
+                // The stream will be marked complete, but an error state might be needed.
+              }
+            } catch (error) {
+              console.warn(
+                "无法解析Gemini流式数据 (final buffer)",
+                buffer,
+                error
+              );
+            }
+          }
+          onStream(fullContent, true); // Send final accumulated content and mark as complete
           break;
         }
 
-        // 解码接收到的数据
-        const chunk = decoder.decode(value, { stream: true });
+        // Append new data to buffer
+        buffer += decoder.decode(value, { stream: true });
 
-        try {
-          // Gemini流式响应可能是一个JSON对象或多个JSON对象
-          // 将块分割成单独的JSON对象
-          const jsonLines = chunk
-            .split("\n")
-            .filter((line) => line.trim())
-            .map((line) => {
-              try {
-                return JSON.parse(line);
-              } catch {
-                // 忽略解析错误，返回 null
-                return null;
-              }
-            })
-            .filter(Boolean);
+        // Process complete JSON objects from the buffer
+        let boundaryIndex;
+        // eslint-disable-next-line no-cond-assign
+        while ((boundaryIndex = buffer.indexOf("\\n")) !== -1) {
+          const line = buffer.substring(0, boundaryIndex).trim();
+          buffer = buffer.substring(boundaryIndex + 1); // Remaining part for next iteration or next chunk
 
-          for (const jsonData of jsonLines) {
+          if (line === "") continue;
+
+          try {
+            const jsonData = JSON.parse(line);
             // 提取文本内容
             const textContent =
               jsonData.candidates?.[0]?.content?.parts?.[0]?.text || "";
             if (textContent) {
               fullContent += textContent;
-              onStream(fullContent, false);
+              onStream(fullContent, false); // Stream accumulated content
             }
 
             // 检查安全过滤
             if (jsonData.promptFeedback?.blockReason) {
+              onStream(fullContent, true); // Mark as complete due to error
               throw new Error(
                 `Gemini内容被过滤: ${jsonData.promptFeedback.blockReason}`
               );
             }
+          } catch (error) {
+            // This catch is for JSON.parse(line)
+            console.warn("无法解析Gemini流式数据 (line)", line, error);
+            // If a line fails to parse, it might be an incomplete part that was split
+            // without a newline, or genuinely malformed. The buffer should handle most splits.
+            // For now, we log and continue, similar to the original code's behavior of discarding unparsable lines.
           }
-        } catch (error) {
-          if (error instanceof Error && error.message.includes("Gemini内容被过滤")) {
-            throw error;
-          }
-          console.warn("无法解析Gemini流式数据", error);
         }
+        // After the loop, 'buffer' contains the incomplete part of the last line (if any)
+        // which will be processed with the next chunk or in the 'done' block.
       }
     } catch (error) {
       console.error("Gemini流式API调用失败:", error);
