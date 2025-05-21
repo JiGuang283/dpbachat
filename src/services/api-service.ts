@@ -582,26 +582,47 @@ class GeminiService extends BaseApiService {
           // Process any remaining data in the buffer when the stream is done
           if (buffer.trim()) {
             try {
-              const jsonData = JSON.parse(buffer);
-              const textContent =
-                jsonData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              if (textContent) {
-                fullContent += textContent;
-                // The final onStream(fullContent, true) will send this.
+              const parsedData = JSON.parse(buffer);
+              let responsesToProcess: any[] = [];
+
+              if (Array.isArray(parsedData)) {
+                responsesToProcess = parsedData;
+              } else if (typeof parsedData === 'object' && parsedData !== null) {
+                // Handle if buffer was a single JSON object (e.g. if not an array stream)
+                responsesToProcess = [parsedData];
               }
-              if (jsonData.promptFeedback?.blockReason) {
-                console.error(
-                  `Gemini内容被过滤 (final buffer): ${jsonData.promptFeedback.blockReason}`
-                );
-                // Consider how to propagate this error. For now, it's logged.
-                // The stream will be marked complete, but an error state might be needed.
+
+              for (const responseObject of responsesToProcess) {
+                // Check for prompt feedback / block reason at the response object level
+                if (responseObject.promptFeedback?.blockReason) {
+                  console.error(
+                    `Gemini content filtered in final processing: ${responseObject.promptFeedback.blockReason}`
+                  );
+                  // Optionally, throw an error or set an error message in fullContent.
+                  // If an error is thrown here, it will be caught by the outer catch block.
+                  // For now, content accumulation continues, and the error is logged.
+                }
+
+                if (responseObject.candidates && Array.isArray(responseObject.candidates)) {
+                  for (const candidate of responseObject.candidates) {
+                    if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
+                      for (const part of candidate.content.parts) {
+                        if (typeof part.text === 'string') {
+                          fullContent += part.text;
+                        }
+                      }
+                    }
+                  }
+                }
               }
             } catch (error) {
               console.warn(
-                "无法解析Gemini流式数据 (final buffer)",
+                "无法解析Gemini最终流式数据 (final buffer)",
                 buffer,
                 error
               );
+              // If parsing the final buffer fails, onStream will send whatever fullContent has accumulated so far.
+              // The error is logged, and the stream will be marked as complete.
             }
           }
           onStream(fullContent, true); // Send final accumulated content and mark as complete
