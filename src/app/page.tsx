@@ -53,7 +53,7 @@ export default function Home() {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeView, setActiveView] = useState(() => 
+  const [activeView, setActiveView] = useState(() =>
     currentConversationId ? "chat" : "settings"
   );
 
@@ -90,12 +90,11 @@ export default function Home() {
     initializeData();
   }, []);
 
-  // 当有当前对话时，自动切换到聊天视图
+  // 只在初始化时设置默认视图
   useEffect(() => {
-    if (currentConversationId && activeView !== "chat") {
-      setActiveView("chat");
-    }
-  }, [currentConversationId, activeView]);
+    // 只在页面初次加载时，根据是否有当前对话来设置默认视图
+    // 之后用户可以自由切换视图
+  }, []);
 
   // 创建新对话
   const createNewConversation = () => {
@@ -135,9 +134,7 @@ export default function Home() {
           <Card className="text-center p-6">
             <CardHeader>
               <CardTitle>没有进行中的对话</CardTitle>
-              <CardDescription>
-                创建一个新的对话或选择已有对话
-              </CardDescription>
+              <CardDescription>创建一个新的对话或选择已有对话</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center">
               {batchMode && selectedConversations.length > 0 && (
@@ -151,8 +148,7 @@ export default function Home() {
                       size="sm"
                       onClick={() => {
                         if (
-                          selectedConversations.length ===
-                          conversations.length
+                          selectedConversations.length === conversations.length
                         ) {
                           clearSelectedConversations();
                         } else {
@@ -194,10 +190,12 @@ export default function Home() {
                       onClick={
                         batchMode
                           ? () => toggleSelectConversation(conv.id)
-                          : () =>
+                          : () => {
                               useAppStore
                                 .getState()
-                                .setCurrentConversation(conv.id)
+                                .setCurrentConversation(conv.id);
+                              setActiveView("chat");
+                            }
                       }
                     >
                       {batchMode && (
@@ -209,9 +207,7 @@ export default function Home() {
                         </div>
                       )}
                       <CardHeader>
-                        <CardTitle className="truncate">
-                          {conv.title}
-                        </CardTitle>
+                        <CardTitle className="truncate">{conv.title}</CardTitle>
                       </CardHeader>
                       <CardFooter>
                         <p className="text-sm text-muted-foreground">
@@ -258,10 +254,16 @@ export default function Home() {
   return (
     <div className="h-screen flex">
       {/* 左侧边栏 */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-0'} bg-background border-r border-border flex flex-col shadow-sm transition-all duration-300 ease-in-out overflow-hidden`}>
+      <div
+        className={`${
+          sidebarOpen ? "w-64" : "w-0"
+        } bg-background border-r border-border flex flex-col shadow-sm transition-all duration-300 ease-in-out overflow-hidden`}
+      >
         {/* 头部 */}
         <div className="p-6 border-b border-border">
-          <h1 className="text-2xl font-bold text-foreground whitespace-nowrap">Dpbachat</h1>
+          <h1 className="text-2xl font-bold text-foreground whitespace-nowrap">
+            Dpbachat
+          </h1>
         </div>
 
         {/* 导航菜单 */}
@@ -292,7 +294,7 @@ export default function Home() {
         {/* 底部新建对话按钮 */}
         <div className="p-4 border-t border-border">
           <Button onClick={createNewConversation} className="w-full h-11">
-            <Plus className="mr-2 h-4 w-4" /> 
+            <Plus className="mr-2 h-4 w-4" />
             <span className="whitespace-nowrap">新建对话</span>
           </Button>
         </div>
@@ -315,13 +317,11 @@ export default function Home() {
             )}
           </Button>
           <h2 className="text-lg font-semibold">
-            {sidebarItems.find(item => item.id === activeView)?.label}
+            {sidebarItems.find((item) => item.id === activeView)?.label}
           </h2>
         </div>
-        
-        <div className="flex-1 overflow-auto p-6">
-          {renderMainContent()}
-        </div>
+
+        <div className="flex-1 overflow-auto p-6">{renderMainContent()}</div>
       </div>
 
       {/* 批量删除确认对话框 */}

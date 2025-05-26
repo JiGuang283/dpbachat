@@ -60,14 +60,49 @@ export default function ChatView() {
     }
   }, [currentConversationId, conversation, router]);
 
-  // 滚动到最新消息
+  // 滚动到最新消息 - 优化流式传输时的滚动行为
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // 使用防抖来减少滚动频率，特别是在流式传输时
+  const scrollToBottomDebounced = useRef<NodeJS.Timeout | null>(null);
+  const lastScrollTime = useRef<number>(0);
+
+  const handleScroll = () => {
+    const now = Date.now();
+    // 在流式传输期间，限制滚动频率到每500ms最多一次
+    const minInterval = isStreaming ? 500 : 100;
+
+    if (scrollToBottomDebounced.current) {
+      clearTimeout(scrollToBottomDebounced.current);
+    }
+
+    const timeToWait = Math.max(
+      0,
+      minInterval - (now - lastScrollTime.current)
+    );
+
+    scrollToBottomDebounced.current = setTimeout(() => {
+      lastScrollTime.current = Date.now();
+      scrollToBottom();
+    }, timeToWait);
+  };
+
   useEffect(() => {
-    scrollToBottom();
-  }, [conversation?.messages]);
+    // 只在消息数量变化或流式传输结束时滚动
+    if (!isStreaming || !sending) {
+      handleScroll();
+    }
+  }, [conversation?.messages?.length, isStreaming, sending]);
+
+  // 为流式传输添加专门的滚动处理
+  useEffect(() => {
+    if (isStreaming && sending && streamingContent) {
+      // 流式传输时，每接收到内容就尝试滚动，但有频率限制
+      handleScroll();
+    }
+  }, [streamingContent, isStreaming, sending]);
 
   if (!conversation) return null;
 
@@ -116,7 +151,7 @@ export default function ChatView() {
   // 返回主页
   const goBack = () => {
     useAppStore.getState().setCurrentConversation(null);
-    router.push("/");
+    // 不强制切换到特定视图，让用户保持在当前视图
   };
 
   // 确认删除对话

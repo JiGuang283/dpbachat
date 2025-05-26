@@ -6,6 +6,9 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./button";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 interface MarkdownRendererProps {
   content: string;
@@ -30,9 +33,11 @@ export function MarkdownRenderer({
 
   return (
     <div
-      className={`prose prose-slate dark:prose-invert max-w-none ${className}`}
+      className={`prose prose-slate dark:prose-invert max-w-none overflow-hidden markdown-container ${className}`}
     >
       <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           // 代码块渲染
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -209,6 +214,43 @@ export function MarkdownRenderer({
               <p className="mb-4 leading-relaxed" {...rest}>
                 {children}
               </p>
+            );
+          },
+          // 数学公式渲染 - 行内公式
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          span(props: any) {
+            const { className, children, ...rest } = props;
+            if (className === "math math-inline") {
+              return (
+                <span className="katex-inline mx-1" {...rest}>
+                  {children}
+                </span>
+              );
+            }
+            return (
+              <span className={className} {...rest}>
+                {children}
+              </span>
+            );
+          },
+          // 数学公式渲染 - 块级公式
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          div(props: any) {
+            const { className, children, ...rest } = props;
+            if (className === "math math-display") {
+              return (
+                <div
+                  className="katex-display my-4 text-center overflow-x-auto"
+                  {...rest}
+                >
+                  {children}
+                </div>
+              );
+            }
+            return (
+              <div className={className} {...rest}>
+                {children}
+              </div>
             );
           },
         }}
