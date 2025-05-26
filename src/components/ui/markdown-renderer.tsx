@@ -35,8 +35,9 @@ export function MarkdownRenderer({
       <ReactMarkdown
         components={{
           // 代码块渲染
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           code(props: any) {
-            const { node, inline, className, children, ...rest } = props;
+            const { inline, className, children, ...rest } = props;
             const match = /language-(\w+)/.exec(className || "");
             const language = match ? match[1] : "";
             const codeContent = String(children).replace(/\n$/, "");
@@ -61,7 +62,7 @@ export function MarkdownRenderer({
                     </Button>
                   </div>
                   <SyntaxHighlighter
-                    style={oneDark as any}
+                    style={oneDark as { [key: string]: React.CSSProperties }}
                     language={language}
                     PreTag="div"
                     className="!mt-0 !rounded-t-none"
@@ -83,6 +84,7 @@ export function MarkdownRenderer({
             );
           },
           // 链接渲染
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           a(props: any) {
             const { href, children, ...rest } = props;
             return (
@@ -98,6 +100,7 @@ export function MarkdownRenderer({
             );
           },
           // 表格渲染
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           table(props: any) {
             const { children, ...rest } = props;
             return (
@@ -111,6 +114,7 @@ export function MarkdownRenderer({
               </div>
             );
           },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           th(props: any) {
             const { children, ...rest } = props;
             return (
@@ -122,6 +126,7 @@ export function MarkdownRenderer({
               </th>
             );
           },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           td(props: any) {
             const { children, ...rest } = props;
             return (
@@ -134,6 +139,7 @@ export function MarkdownRenderer({
             );
           },
           // 引用块渲染
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           blockquote(props: any) {
             const { children, ...rest } = props;
             return (
@@ -146,6 +152,7 @@ export function MarkdownRenderer({
             );
           },
           // 列表渲染
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ul(props: any) {
             const { children, ...rest } = props;
             return (
@@ -154,6 +161,7 @@ export function MarkdownRenderer({
               </ul>
             );
           },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ol(props: any) {
             const { children, ...rest } = props;
             return (
@@ -163,6 +171,7 @@ export function MarkdownRenderer({
             );
           },
           // 标题渲染
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           h1(props: any) {
             const { children, ...rest } = props;
             return (
@@ -174,6 +183,7 @@ export function MarkdownRenderer({
               </h1>
             );
           },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           h2(props: any) {
             const { children, ...rest } = props;
             return (
@@ -182,6 +192,7 @@ export function MarkdownRenderer({
               </h2>
             );
           },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           h3(props: any) {
             const { children, ...rest } = props;
             return (
@@ -191,6 +202,7 @@ export function MarkdownRenderer({
             );
           },
           // 段落渲染
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           p(props: any) {
             const { children, ...rest } = props;
             return (
