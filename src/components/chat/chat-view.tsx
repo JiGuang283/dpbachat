@@ -9,6 +9,7 @@ import { useAppStore } from "@/store";
 // 重新导入 ChatService 以解决导入错误
 import { ChatService } from "@/services/chat-service";
 import { LoadingAnimation } from "@/components/ui/loading-animation";
+import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { Loader2, Send, ArrowLeft, Trash, Zap } from "lucide-react";
 import {
   Dialog,
@@ -227,7 +228,7 @@ export default function ChatView() {
                       )}
                   </div>
                   <div
-                    className={`whitespace-pre-wrap ${
+                    className={`${
                       sending &&
                       index === conversation.messages.length - 1 &&
                       msg.role === MessageRole.Assistant &&
@@ -237,12 +238,21 @@ export default function ChatView() {
                         : ""
                     }`}
                   >
-                    {sending &&
-                    index === conversation.messages.length - 1 &&
-                    msg.role === MessageRole.Assistant &&
-                    useStreamingMode
-                      ? streamingContent
-                      : msg.content}
+                    {/* 根据消息角色选择渲染方式 */}
+                    {msg.role === MessageRole.Assistant ? (
+                      <MarkdownRenderer
+                        content={
+                          sending &&
+                          index === conversation.messages.length - 1 &&
+                          msg.role === MessageRole.Assistant &&
+                          useStreamingMode
+                            ? streamingContent
+                            : msg.content
+                        }
+                      />
+                    ) : (
+                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                    )}
                   </div>
                 </div>
               ))}
