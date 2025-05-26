@@ -10,6 +10,70 @@ export type StreamResponseHandler = (
 ) => void;
 
 /**
+ * 通用API请求体类型
+ */
+interface BaseRequestBody {
+  model: string;
+  temperature?: number;
+  stream?: boolean;
+}
+
+/**
+ * OpenAI/DeepSeek API请求体类型
+ */
+interface OpenAIRequestBody extends BaseRequestBody {
+  messages: Array<{
+    role: string;
+    content: string;
+  }>;
+}
+
+/**
+ * Gemini API请求体类型
+ */
+interface GeminiRequestBody {
+  contents: Array<{
+    role: string;
+    parts: Array<{ text: string }>;
+  }>;
+  generationConfig?: {
+    temperature?: number;
+  };
+}
+
+/**
+ * Claude API请求体类型
+ */
+interface ClaudeRequestBody extends BaseRequestBody {
+  messages: Array<{
+    role: string;
+    content: string;
+  }>;
+}
+
+/**
+ * 流式响应JSON数据类型
+ */
+interface StreamChunkData {
+  choices?: Array<{
+    delta?: {
+      content?: string;
+    };
+  }>;
+  type?: string;
+  delta?: {
+    text?: string;
+  };
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
+    };
+  }>;
+}
+
+/**
  * 通用API请求配置 - 增加超时和响应大小处理
  */
 const API_REQUEST_CONFIG = {
@@ -90,9 +154,9 @@ abstract class BaseApiService {
    */
   protected async handleStreamRequest(
     url: string,
-    requestBody: any,
+    requestBody: OpenAIRequestBody | ClaudeRequestBody,
     headers: Record<string, string>,
-    parseChunk: (chunk: any) => string, // 子类实现的增量解析函数
+    parseChunk: (chunk: StreamChunkData) => string, // 子类实现的增量解析函数
     onStream: StreamResponseHandler // 新增：流式回调参数
   ): Promise<void> {
     try {
@@ -129,7 +193,7 @@ abstract class BaseApiService {
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             try {
-              const jsonData = JSON.parse(line.slice(6));
+              const jsonData = JSON.parse(line.slice(6)) as StreamChunkData;
               const delta = parseChunk(jsonData); // 子类解析增量
               if (delta) onStream(delta, false); // 传递增量内容
             } catch (parseError) {
@@ -217,7 +281,7 @@ class OpenAIService extends BaseApiService {
         stream: true,
       },
       { Authorization: `Bearer ${this.config.apiKey}` },
-      (jsonData) => jsonData.choices?.[0]?.delta?.content || "",
+      (jsonData: StreamChunkData) => jsonData.choices?.[0]?.delta?.content || "",
       onStream // 补充第5个参数：流式回调
     );
   }
@@ -287,7 +351,7 @@ class DeepSeekService extends BaseApiService {
         stream: true,
       },
       { Authorization: `Bearer ${this.config.apiKey}` },
-      (jsonData) => jsonData.choices?.[0]?.delta?.content || "",
+      (jsonData: StreamChunkData) => jsonData.choices?.[0]?.delta?.content || "",
       onStream // 补充第5个参数
     );
   }
@@ -378,7 +442,7 @@ class GeminiService extends BaseApiService {
    */
   private async handleGeminiStreamRequest(
     url: string,
-    requestBody: any,
+    requestBody: GeminiRequestBody,
     headers: Record<string, string>,
     onStream: StreamResponseHandler
   ): Promise<void> {
@@ -424,7 +488,7 @@ class GeminiService extends BaseApiService {
             }
 
             try {
-              const jsonData = JSON.parse(data);
+              const jsonData = JSON.parse(data) as StreamChunkData;
               // Gemini 流式响应格式：candidates[0].content.parts[0].text
               const delta =
                 jsonData.candidates?.[0]?.content?.parts?.[0]?.text || "";
@@ -521,7 +585,7 @@ class ClaudeService extends BaseApiService {
         "anthropic-version": "2023-06-01",
         "anthropic-beta": "messages-2023-12-15",
       },
-      (jsonData) =>
+      (jsonData: StreamChunkData) =>
         jsonData.type === "content_block_delta"
           ? jsonData.delta?.text || ""
           : "",
